@@ -15,6 +15,25 @@
           <p class="date" id="today-label"></p>
         </header>
 
+        <section class="auth-panel" aria-label="Профиль">
+          <div>
+            <span class="auth-label">Профиль</span>
+            <p class="auth-status" id="auth-status">Проверяем подключение...</p>
+          </div>
+          <button class="secondary-button" id="login-button" type="button">Войти через Google</button>
+          <div class="profile-panel is-hidden" id="profile-panel">
+            <div class="profile-meta">
+              <span class="profile-name" id="profile-name"></span>
+              <span class="profile-email" id="profile-email"></span>
+            </div>
+            <button class="ghost-button" id="logout-button" type="button">Выйти</button>
+          </div>
+        </section>
+
+        <p class="setup-notice is-hidden" id="setup-notice">
+          Облачная синхронизация пока не настроена. Дела временно сохраняются только в этом браузере.
+        </p>
+
         <form class="todo-form" id="todo-form">
           <label class="visually-hidden" for="todo-input">Новое дело</label>
           <input
@@ -38,6 +57,6 @@
       </section>
     </main>
 
-    <script src="script.js"></script>
+    <script type="module" src="script.js"></script>
   </body>
 </html>
