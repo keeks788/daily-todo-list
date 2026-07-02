@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Список дел на сегодня</title>
+    <script type="module" crossorigin src="./assets/index-CzofayfW.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-CLPjcnBU.css">
+  </head>
+  <body>
+    <main class="app">
+      <section class="todo-panel" aria-labelledby="app-title">
+        <header class="app-header">
+          <div class="header-copy">
+            <h1 id="app-title">Список дел на сегодня</h1>
+          </div>
+
+          <div class="header-actions">
+            <div class="calendar-menu">
+              <span class="calendar-icon" aria-hidden="true"></span>
+              <input
+                class="calendar-input"
+                id="selected-date-input"
+                type="date"
+                aria-label="Выбрать день"
+                title="Выбрать день"
+              />
+            </div>
+
+            <div class="account-menu" id="account-menu">
+              <button
+                class="account-menu-button"
+                id="account-menu-button"
+                type="button"
+                aria-expanded="false"
+                aria-controls="account-menu-panel"
+              >
+                <span class="account-dot" aria-hidden="true"></span>
+                <span id="account-menu-label">Профиль</span>
+              </button>
+
+              <section
+                class="account-dropdown is-hidden"
+                id="account-menu-panel"
+                aria-label="Профиль"
+              >
+                <span class="auth-label">Профиль</span>
+                <p class="auth-status" id="auth-status">Проверяем подключение...</p>
+                <button class="secondary-button" id="login-button" type="button">
+                  Войти через Google
+                </button>
+                <div class="profile-panel is-hidden" id="profile-panel">
+                  <div class="profile-meta">
+                    <span class="profile-name" id="profile-name"></span>
+                    <span class="profile-email" id="profile-email"></span>
+                  </div>
+                  <button class="ghost-button" id="logout-button" type="button">Выйти</button>
+                </div>
+              </section>
+            </div>
+          </div>
+        </header>
+
+        <p class="setup-notice is-hidden" id="setup-notice">
+          Облачная синхронизация пока не настроена. Дела временно сохраняются только в этом
+          браузере.
+        </p>
+
+        <form class="todo-form" id="todo-form">
+          <label class="visually-hidden" for="todo-input">Новое дело</label>
+          <textarea
+            id="todo-input"
+            autocomplete="off"
+            maxlength="600"
+            rows="1"
+            placeholder="Например: разобрать почту"
+          ></textarea>
+          <button class="primary-button" id="add-todo-button" type="submit">Добавить</button>
+        </form>
+
+        <section class="progress-panel" aria-label="Прогресс дня">
+          <div class="progress-content">
+            <span class="summary-title">Прогресс</span>
+            <p class="progress-text" id="progress-text">Выполнено: 0 из 0</p>
+            <div
+              class="progress-track"
+              role="progressbar"
+              aria-label="Прогресс выполнения дел"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuenow="0"
+              id="progress-track"
+            >
+              <span class="progress-bar" id="progress-bar"></span>
+            </div>
+          </div>
+          <button class="primary-button finish-button" id="finish-day-button" type="button">
+            Завершить день
+          </button>
+        </section>
+
+        <ul class="todo-list" id="todo-list" aria-label="Дела на сегодня"></ul>
+
+        <p class="empty-state" id="empty-state">Пока нет дел. Добавьте первое дело на сегодня.</p>
+      </section>
+    </main>
+
+  </body>
+</html>
