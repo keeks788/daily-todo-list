@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Список дел на сегодня</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="app">
+      <section class="todo-panel" aria-labelledby="app-title">
+        <header class="app-header">
+          <p class="eyebrow">План на день</p>
+          <h1 id="app-title">Список дел на сегодня</h1>
+          <p class="date" id="today-label"></p>
+        </header>
+
+        <form class="todo-form" id="todo-form">
+          <label class="visually-hidden" for="todo-input">Новое дело</label>
+          <input
+            id="todo-input"
+            type="text"
+            autocomplete="off"
+            maxlength="90"
+            placeholder="Например: разобрать почту"
+          />
+          <button class="primary-button" type="submit">Добавить</button>
+        </form>
+
+        <ul class="todo-list" id="todo-list" aria-label="Дела на сегодня"></ul>
+
+        <p class="empty-state" id="empty-state">Пока нет дел. Добавьте первое дело на сегодня.</p>
+
+        <footer class="day-summary" id="day-summary" aria-live="polite">
+          <span class="summary-title">Итог дня</span>
+          <span class="summary-text" id="summary-text"></span>
+        </footer>
+      </section>
+    </main>
+
+    <script src="script.js"></script>
+  </body>
+</html>
