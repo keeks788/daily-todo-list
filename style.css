@@ -85,8 +85,8 @@ textarea:disabled {
 }
 
 .todo-panel > .setup-notice,
-.todo-panel > .todo-form,
 .todo-panel > .progress-panel,
+.todo-panel > .todo-form,
 .todo-panel > .todo-list,
 .todo-panel > .empty-state {
   width: min(100%, 1240px);
@@ -413,14 +413,19 @@ h1 {
 
 .todo-item {
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) 44px;
-  gap: 10px;
-  align-items: center;
+  gap: 8px;
   min-height: 54px;
   padding: 5px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: #fbfcfe;
+}
+
+.todo-main-row {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  gap: 10px;
+  align-items: center;
 }
 
 .todo-checkbox {
@@ -448,12 +453,91 @@ h1 {
   text-align: left;
 }
 
-.todo-item.is-completed .todo-text {
+.todo-item.is-completed .todo-text,
+.subtask-item.is-completed .subtask-text {
   color: var(--text-muted);
   text-decoration: line-through;
 }
 
-.delete-button {
+.subtask-list {
+  display: grid;
+  gap: 6px;
+  margin: 0 44px 0 54px;
+  padding: 0;
+  list-style: none;
+}
+
+.subtask-item {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 34px;
+  gap: 8px;
+  align-items: center;
+  min-height: 38px;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.subtask-checkbox {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+}
+
+.subtask-checkbox input {
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.subtask-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  line-height: 1.35;
+}
+
+.subtask-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 108px;
+  gap: 8px;
+  margin: 0 44px 4px 54px;
+}
+
+.subtask-input {
+  min-width: 0;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-main);
+  background: #ffffff;
+  outline: none;
+}
+
+.subtask-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.subtask-add-button {
+  min-width: 0;
+  height: 38px;
+  border-radius: 8px;
+  color: var(--accent);
+  border: 1px solid var(--border);
+  background: #ffffff;
+  font-weight: 700;
+}
+
+.subtask-add-button:hover {
+  border-color: var(--accent);
+}
+
+.delete-button,
+.subtask-delete-button {
   width: 44px;
   height: 44px;
   border-radius: 8px;
@@ -463,7 +547,14 @@ h1 {
   line-height: 1;
 }
 
-.delete-button:hover {
+.subtask-delete-button {
+  width: 34px;
+  height: 34px;
+  font-size: 18px;
+}
+
+.delete-button:hover,
+.subtask-delete-button:hover {
   background: #fee4e2;
 }
 
@@ -533,8 +624,15 @@ h1 {
     width: 100%;
   }
 
-  .todo-form {
+  .todo-form,
+  .subtask-form {
     grid-template-columns: 1fr;
+  }
+
+  .subtask-list,
+  .subtask-form {
+    margin-right: 0;
+    margin-left: 54px;
   }
 
   .progress-panel {

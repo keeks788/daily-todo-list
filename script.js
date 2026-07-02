@@ -88,13 +88,18 @@ form.addEventListener("submit", async (event) => {
 });
 
 list.addEventListener("change", async (event) => {
-  const checkbox = event.target.closest("[data-action='toggle']");
+  const checkbox = event.target.closest("[data-action='toggle'], [data-action='toggle-subtask']");
 
   if (!checkbox) {
     return;
   }
 
   try {
+    if (checkbox.dataset.action === "toggle-subtask") {
+      await toggleSubtask(checkbox.dataset.parentId, checkbox.dataset.id, checkbox.checked);
+      return;
+    }
+
     await toggleTodo(checkbox.dataset.id, checkbox.checked);
   } catch (error) {
     showError("Не удалось обновить дело.", error);
@@ -103,16 +108,50 @@ list.addEventListener("change", async (event) => {
 });
 
 list.addEventListener("click", async (event) => {
-  const button = event.target.closest("[data-action='delete']");
+  const button = event.target.closest("[data-action='delete'], [data-action='delete-subtask']");
 
   if (!button) {
     return;
   }
 
   try {
+    if (button.dataset.action === "delete-subtask") {
+      await deleteSubtask(button.dataset.parentId, button.dataset.id);
+      return;
+    }
+
     await deleteTodo(button.dataset.id);
   } catch (error) {
     showError("Не удалось удалить дело.", error);
+  }
+});
+
+list.addEventListener("submit", async (event) => {
+  const subtaskForm = event.target.closest("[data-action='add-subtask']");
+
+  if (!subtaskForm) {
+    return;
+  }
+
+  event.preventDefault();
+
+  const subtaskInput = subtaskForm.querySelector("[data-role='subtask-input']");
+  const text = subtaskInput.value.trim();
+
+  if (!text) {
+    subtaskInput.focus();
+    return;
+  }
+
+  setSubtaskFormBusy(subtaskForm, true);
+
+  try {
+    await addSubtask(subtaskForm.dataset.parentId, text);
+    subtaskInput.value = "";
+  } catch (error) {
+    showError("Не удалось добавить поддело.", error);
+  } finally {
+    setSubtaskFormBusy(subtaskForm, false);
   }
 });
 
@@ -328,6 +367,7 @@ async function addTodo(text) {
     id: crypto.randomUUID(),
     text,
     completed: false,
+    subtasks: [],
   };
 
   if (appMode === "local") {
@@ -343,6 +383,7 @@ async function addTodo(text) {
   await firebaseServices.setDoc(todoDocument(currentUser.uid, todo.id), {
     text: todo.text,
     completed: todo.completed,
+    subtasks: todo.subtasks,
     createdAt: firebaseServices.serverTimestamp(),
     updatedAt: firebaseServices.serverTimestamp(),
   });
@@ -389,6 +430,80 @@ async function deleteTodo(id) {
   requireSignedInUser();
 
   await firebaseServices.deleteDoc(todoDocument(currentUser.uid, id));
+  await clearCloudDayResultIfClosed();
+}
+
+async function addSubtask(parentId, text) {
+  requireEditableDay();
+
+  const parentTodo = findTodo(parentId);
+
+  if (!parentTodo) {
+    throw new Error("Parent todo was not found.");
+  }
+
+  const subtasks = [
+    ...parentTodo.subtasks,
+    {
+      id: crypto.randomUUID(),
+      text,
+      completed: false,
+    },
+  ];
+
+  await updateTodoSubtasks(parentId, subtasks);
+}
+
+async function toggleSubtask(parentId, subtaskId, completed) {
+  requireEditableDay();
+
+  const parentTodo = findTodo(parentId);
+
+  if (!parentTodo) {
+    throw new Error("Parent todo was not found.");
+  }
+
+  const subtasks = parentTodo.subtasks.map((subtask) =>
+    subtask.id === subtaskId ? { ...subtask, completed } : subtask,
+  );
+
+  await updateTodoSubtasks(parentId, subtasks);
+}
+
+async function deleteSubtask(parentId, subtaskId) {
+  requireEditableDay();
+
+  const parentTodo = findTodo(parentId);
+
+  if (!parentTodo) {
+    throw new Error("Parent todo was not found.");
+  }
+
+  const subtasks = parentTodo.subtasks.filter((subtask) => subtask.id !== subtaskId);
+
+  await updateTodoSubtasks(parentId, subtasks);
+}
+
+async function updateTodoSubtasks(parentId, subtasks) {
+  if (appMode === "local") {
+    todos = todos.map((todo) => (todo.id === parentId ? { ...todo, subtasks } : todo));
+    clearLocalDayResultIfClosed();
+    saveLocalTodos();
+    render();
+    return;
+  }
+
+  requireSignedInUser();
+
+  await firebaseServices.setDoc(
+    todoDocument(currentUser.uid, parentId),
+    {
+      subtasks,
+      updatedAt: firebaseServices.serverTimestamp(),
+    },
+    { merge: true },
+  );
+
   await clearCloudDayResultIfClosed();
 }
 
@@ -488,7 +603,22 @@ function normalizeTodo(id, data) {
     id,
     text: typeof data.text === "string" ? data.text : "",
     completed: Boolean(data.completed),
+    subtasks: normalizeSubtasks(data.subtasks),
   };
+}
+
+function normalizeSubtasks(subtasks) {
+  if (!Array.isArray(subtasks)) {
+    return [];
+  }
+
+  return subtasks
+    .filter((subtask) => typeof subtask?.id === "string" && typeof subtask?.text === "string")
+    .map((subtask) => ({
+      id: subtask.id,
+      text: subtask.text,
+      completed: Boolean(subtask.completed),
+    }));
 }
 
 function normalizeDayResult(data) {
@@ -519,7 +649,14 @@ function loadLocalTodos() {
 
   try {
     const parsedTodos = JSON.parse(savedTodos);
-    return Array.isArray(parsedTodos) ? parsedTodos : [];
+
+    if (!Array.isArray(parsedTodos)) {
+      return [];
+    }
+
+    return parsedTodos
+      .filter((todo) => typeof todo?.id === "string")
+      .map((todo) => normalizeTodo(todo.id, todo));
   } catch {
     return [];
   }
@@ -566,6 +703,9 @@ function createTodoElement(todo) {
   const item = document.createElement("li");
   item.className = `todo-item${todo.completed ? " is-completed" : ""}`;
 
+  const mainRow = document.createElement("div");
+  mainRow.className = "todo-main-row";
+
   const checkboxLabel = document.createElement("label");
   checkboxLabel.className = "todo-checkbox";
 
@@ -592,14 +732,96 @@ function createTodoElement(todo) {
   deleteButton.title = "Удалить";
 
   checkboxLabel.append(checkbox);
+  mainRow.append(checkboxLabel, text, deleteButton);
+  item.append(mainRow, createSubtaskList(todo), createSubtaskForm(todo));
+
+  return item;
+}
+
+function createSubtaskList(todo) {
+  const subtaskList = document.createElement("ul");
+  subtaskList.className = "subtask-list";
+
+  for (const subtask of todo.subtasks) {
+    subtaskList.append(createSubtaskElement(todo, subtask));
+  }
+
+  return subtaskList;
+}
+
+function createSubtaskElement(todo, subtask) {
+  const item = document.createElement("li");
+  item.className = `subtask-item${subtask.completed ? " is-completed" : ""}`;
+
+  const checkboxLabel = document.createElement("label");
+  checkboxLabel.className = "subtask-checkbox";
+
+  const checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  checkbox.checked = subtask.completed;
+  checkbox.disabled = !canEditTodos();
+  checkbox.dataset.action = "toggle-subtask";
+  checkbox.dataset.parentId = todo.id;
+  checkbox.dataset.id = subtask.id;
+  checkbox.setAttribute("aria-label", `Отметить поддело: ${subtask.text}`);
+
+  const text = document.createElement("span");
+  text.className = "subtask-text";
+  text.textContent = subtask.text;
+
+  const deleteButton = document.createElement("button");
+  deleteButton.className = "subtask-delete-button";
+  deleteButton.type = "button";
+  deleteButton.disabled = !canEditTodos();
+  deleteButton.textContent = "×";
+  deleteButton.dataset.action = "delete-subtask";
+  deleteButton.dataset.parentId = todo.id;
+  deleteButton.dataset.id = subtask.id;
+  deleteButton.setAttribute("aria-label", `Удалить поддело: ${subtask.text}`);
+  deleteButton.title = "Удалить";
+
+  checkboxLabel.append(checkbox);
   item.append(checkboxLabel, text, deleteButton);
 
   return item;
 }
 
+function createSubtaskForm(todo) {
+  const form = document.createElement("form");
+  form.className = "subtask-form";
+  form.dataset.action = "add-subtask";
+  form.dataset.parentId = todo.id;
+
+  const label = document.createElement("label");
+  label.className = "visually-hidden";
+  label.htmlFor = `subtask-input-${todo.id}`;
+  label.textContent = `Новое поддело для: ${todo.text}`;
+
+  const input = document.createElement("input");
+  input.className = "subtask-input";
+  input.id = `subtask-input-${todo.id}`;
+  input.type = "text";
+  input.autocomplete = "off";
+  input.maxLength = 400;
+  input.placeholder = "Добавить поддело";
+  input.disabled = !canEditTodos();
+  input.dataset.role = "subtask-input";
+
+  const button = document.createElement("button");
+  button.className = "subtask-add-button";
+  button.type = "submit";
+  button.disabled = !canEditTodos();
+  button.textContent = "Добавить";
+
+  form.append(label, input, button);
+
+  return form;
+}
+
 function updateProgress() {
-  const totalCount = dayResult?.closed ? dayResult.totalTodos : todos.length;
-  const completedCount = dayResult?.closed ? dayResult.completedTodos : getCompletedCount();
+  const stats = getWorkItemStats();
+  const totalCount = dayResult?.closed ? dayResult.totalTodos : stats.total;
+  const completedCount = dayResult?.closed ? dayResult.completedTodos : stats.completed;
   const progressPercent = getProgressPercent(completedCount, totalCount);
 
   progressTrack.setAttribute("aria-valuenow", String(progressPercent));
@@ -633,12 +855,11 @@ function getProgressPercent(completedCount, totalCount) {
 }
 
 function canFinishDay() {
-  return canEditTodos() && todos.length > 0 && !dayResult?.closed;
+  return canEditTodos() && getWorkItemStats().total > 0 && !dayResult?.closed;
 }
 
 function createDayResult() {
-  const totalTodos = todos.length;
-  const completedTodos = getCompletedCount();
+  const { total: totalTodos, completed: completedTodos } = getWorkItemStats();
   const unfinishedTodos = totalTodos - completedTodos;
 
   return {
@@ -651,8 +872,22 @@ function createDayResult() {
   };
 }
 
-function getCompletedCount() {
-  return todos.filter((todo) => todo.completed).length;
+function getWorkItemStats() {
+  return todos.reduce(
+    (stats, todo) => {
+      const completedSubtasks = todo.subtasks.filter((subtask) => subtask.completed).length;
+
+      return {
+        total: stats.total + 1 + todo.subtasks.length,
+        completed: stats.completed + (todo.completed ? 1 : 0) + completedSubtasks,
+      };
+    },
+    { total: 0, completed: 0 },
+  );
+}
+
+function findTodo(id) {
+  return todos.find((todo) => todo.id === id);
 }
 
 function canEditTodos() {
@@ -772,6 +1007,14 @@ function shouldAutoFinishDay() {
 function setTodoEditingEnabled(isEnabled) {
   input.disabled = !isEnabled;
   addButton.disabled = !isEnabled;
+}
+
+function setSubtaskFormBusy(form, isBusy) {
+  const subtaskInput = form.querySelector("[data-role='subtask-input']");
+  const submitButton = form.querySelector("button[type='submit']");
+
+  subtaskInput.disabled = isBusy || !canEditTodos();
+  submitButton.disabled = isBusy || !canEditTodos();
 }
 
 function setFormBusy(isBusy) {

@@ -74,18 +74,6 @@
           браузере.
         </p>
 
-        <form class="todo-form" id="todo-form">
-          <label class="visually-hidden" for="todo-input">Новое дело</label>
-          <textarea
-            id="todo-input"
-            autocomplete="off"
-            maxlength="600"
-            rows="1"
-            placeholder="Например: разобрать почту"
-          ></textarea>
-          <button class="primary-button" id="add-todo-button" type="submit">Добавить</button>
-        </form>
-
         <section class="progress-panel" aria-label="Прогресс дня">
           <div class="progress-content">
             <span class="summary-title">Прогресс</span>
@@ -106,6 +94,18 @@
             Завершить день
           </button>
         </section>
+
+        <form class="todo-form" id="todo-form">
+          <label class="visually-hidden" for="todo-input">Новое дело</label>
+          <textarea
+            id="todo-input"
+            autocomplete="off"
+            maxlength="600"
+            rows="1"
+            placeholder="Например: разобрать почту"
+          ></textarea>
+          <button class="primary-button" id="add-todo-button" type="submit">Добавить</button>
+        </form>
 
         <ul class="todo-list" id="todo-list" aria-label="Дела на сегодня"></ul>
 
