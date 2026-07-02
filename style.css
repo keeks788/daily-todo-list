@@ -49,14 +49,19 @@ input:disabled {
 }
 
 .app {
+  width: 100%;
   min-height: 100vh;
   display: grid;
-  place-items: center;
-  padding: 32px 16px;
+  align-items: start;
+  justify-items: center;
+  padding: 32px 24px;
 }
 
 .todo-panel {
-  width: min(100%, 620px);
+  width: min(100%, 960px);
+  min-height: calc(100vh - 64px);
+  display: flex;
+  flex-direction: column;
   padding: 32px;
   border: 1px solid rgba(215, 221, 232, 0.8);
   border-radius: 8px;
@@ -239,6 +244,50 @@ h1 {
   transform: translateY(1px);
 }
 
+.progress-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 168px;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 18px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fbfcfe;
+}
+
+.progress-content {
+  min-width: 0;
+}
+
+.progress-text {
+  margin: 5px 0 10px;
+  color: var(--text-main);
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.progress-track {
+  width: 100%;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e6ebf3;
+}
+
+.progress-bar {
+  display: block;
+  width: 0%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 180ms ease;
+}
+
+.finish-button {
+  width: 168px;
+}
+
 .todo-list {
   display: grid;
   gap: 10px;
@@ -364,6 +413,7 @@ h1 {
   }
 
   .todo-panel {
+    min-height: auto;
     padding: 22px 16px;
   }
 
@@ -388,7 +438,12 @@ h1 {
     grid-template-columns: 1fr;
   }
 
-  .primary-button {
+  .progress-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .primary-button,
+  .finish-button {
     width: 100%;
   }
 }

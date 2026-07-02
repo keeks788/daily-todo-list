@@ -17,15 +17,22 @@ const profilePanel = document.querySelector("#profile-panel");
 const profileName = document.querySelector("#profile-name");
 const profileEmail = document.querySelector("#profile-email");
 const setupNotice = document.querySelector("#setup-notice");
+const progressText = document.querySelector("#progress-text");
+const progressTrack = document.querySelector("#progress-track");
+const progressBar = document.querySelector("#progress-bar");
+const finishDayButton = document.querySelector("#finish-day-button");
 
 const todayKey = new Date().toLocaleDateString("sv-SE");
 const localStorageKey = `daily-todos:${todayKey}`;
+const localDayResultKey = `daily-day-result:${todayKey}`;
 
 let todos = [];
+let dayResult = null;
 let appMode = "local";
 let currentUser = null;
 let firebaseServices = null;
 let unsubscribeTodos = null;
+let unsubscribeDay = null;
 
 todayLabel.textContent = new Intl.DateTimeFormat("ru-RU", {
   weekday: "long",
@@ -118,6 +125,21 @@ logoutButton.addEventListener("click", async () => {
   }
 });
 
+finishDayButton.addEventListener("click", async () => {
+  if (!canFinishDay()) {
+    return;
+  }
+
+  finishDayButton.disabled = true;
+
+  try {
+    await finishDay();
+  } catch (error) {
+    showError("Не удалось завершить день. Проверьте подключение к базе.", error);
+    render();
+  }
+});
+
 initializeAppMode();
 
 async function initializeAppMode() {
@@ -139,6 +161,7 @@ function enableLocalMode() {
   appMode = "local";
   currentUser = null;
   todos = loadLocalTodos();
+  dayResult = loadLocalDayResult();
   setupNotice.classList.remove("is-hidden");
   loginButton.disabled = true;
   logoutButton.disabled = true;
@@ -162,10 +185,11 @@ function setupCloudMode() {
 }
 
 function handleAuthStateChange(user) {
-  unsubscribeFromTodos();
+  unsubscribeFromCloudData();
 
   if (!user) {
     todos = [];
+    dayResult = null;
     loginButton.classList.remove("is-hidden");
     profilePanel.classList.add("is-hidden");
     showAuthMessage("Войдите через Google, чтобы работать со своим списком.");
@@ -180,7 +204,23 @@ function handleAuthStateChange(user) {
   profileEmail.textContent = user.email || "";
   showAuthMessage("Загружаем дела из облака...");
   setTodoEditingEnabled(true);
+  subscribeToDay(user.uid);
   subscribeToTodos(user.uid);
+}
+
+function subscribeToDay(userId) {
+  unsubscribeDay = firebaseServices.onSnapshot(
+    dayDocument(userId),
+    (snapshot) => {
+      dayResult = snapshot.exists() ? normalizeDayResult(snapshot.data()) : null;
+      render();
+    },
+    (error) => {
+      showError("Не удалось загрузить итог дня. Проверьте Firestore rules.", error);
+      dayResult = null;
+      render();
+    },
+  );
 }
 
 function subscribeToTodos(userId) {
@@ -213,6 +253,7 @@ async function addTodo(text) {
 
   if (appMode === "local") {
     todos = [...todos, todo];
+    clearLocalDayResultIfClosed();
     saveLocalTodos();
     render();
     return;
@@ -226,11 +267,14 @@ async function addTodo(text) {
     createdAt: firebaseServices.serverTimestamp(),
     updatedAt: firebaseServices.serverTimestamp(),
   });
+
+  await clearCloudDayResultIfClosed();
 }
 
 async function toggleTodo(id, completed) {
   if (appMode === "local") {
     todos = todos.map((todo) => (todo.id === id ? { ...todo, completed } : todo));
+    clearLocalDayResultIfClosed();
     saveLocalTodos();
     render();
     return;
@@ -246,11 +290,14 @@ async function toggleTodo(id, completed) {
     },
     { merge: true },
   );
+
+  await clearCloudDayResultIfClosed();
 }
 
 async function deleteTodo(id) {
   if (appMode === "local") {
     todos = todos.filter((todo) => todo.id !== id);
+    clearLocalDayResultIfClosed();
     saveLocalTodos();
     render();
     return;
@@ -259,6 +306,57 @@ async function deleteTodo(id) {
   requireSignedInUser();
 
   await firebaseServices.deleteDoc(todoDocument(currentUser.uid, id));
+  await clearCloudDayResultIfClosed();
+}
+
+async function finishDay() {
+  const result = createDayResult();
+
+  if (appMode === "local") {
+    dayResult = result;
+    saveLocalDayResult();
+    render();
+    return;
+  }
+
+  requireSignedInUser();
+
+  await firebaseServices.setDoc(
+    dayDocument(currentUser.uid),
+    {
+      ...result,
+      closedAt: firebaseServices.serverTimestamp(),
+      updatedAt: firebaseServices.serverTimestamp(),
+    },
+    { merge: true },
+  );
+}
+
+async function clearCloudDayResultIfClosed() {
+  if (!dayResult?.closed || appMode !== "cloud") {
+    return;
+  }
+
+  requireSignedInUser();
+  dayResult = null;
+
+  await firebaseServices.setDoc(
+    dayDocument(currentUser.uid),
+    {
+      closed: false,
+      updatedAt: firebaseServices.serverTimestamp(),
+    },
+    { merge: true },
+  );
+}
+
+function clearLocalDayResultIfClosed() {
+  if (!dayResult?.closed) {
+    return;
+  }
+
+  dayResult = null;
+  localStorage.removeItem(localDayResultKey);
 }
 
 function requireSignedInUser() {
@@ -276,6 +374,10 @@ function todosCollection(userId) {
     todayKey,
     "todos",
   );
+}
+
+function dayDocument(userId) {
+  return firebaseServices.doc(firebaseServices.db, "users", userId, "days", todayKey);
 }
 
 function todoDocument(userId, todoId) {
@@ -298,6 +400,25 @@ function normalizeTodo(id, data) {
   };
 }
 
+function normalizeDayResult(data) {
+  if (!data?.closed) {
+    return null;
+  }
+
+  const totalTodos = Number(data.totalTodos) || 0;
+  const completedTodos = Number(data.completedTodos) || 0;
+  const unfinishedTodos = Number(data.unfinishedTodos) || 0;
+
+  return {
+    closed: true,
+    status: data.status === "completed" ? "completed" : "incomplete",
+    totalTodos,
+    completedTodos,
+    unfinishedTodos,
+    closedAt: data.closedAt || null,
+  };
+}
+
 function loadLocalTodos() {
   const savedTodos = localStorage.getItem(localStorageKey);
 
@@ -317,6 +438,24 @@ function saveLocalTodos() {
   localStorage.setItem(localStorageKey, JSON.stringify(todos));
 }
 
+function loadLocalDayResult() {
+  const savedResult = localStorage.getItem(localDayResultKey);
+
+  if (!savedResult) {
+    return null;
+  }
+
+  try {
+    return normalizeDayResult(JSON.parse(savedResult));
+  } catch {
+    return null;
+  }
+}
+
+function saveLocalDayResult() {
+  localStorage.setItem(localDayResultKey, JSON.stringify(dayResult));
+}
+
 function render() {
   list.innerHTML = "";
 
@@ -325,6 +464,7 @@ function render() {
   }
 
   emptyState.classList.toggle("is-hidden", todos.length > 0);
+  updateProgress();
   updateSummary();
 }
 
@@ -366,6 +506,20 @@ function createTodoElement(todo) {
 function updateSummary() {
   summary.className = "day-summary";
 
+  if (dayResult?.closed) {
+    if (dayResult.status === "completed") {
+      summary.classList.add("is-success");
+      summaryText.textContent = "День закрыт: все дела выполнены.";
+      return;
+    }
+
+    summary.classList.add("is-warning");
+    summaryText.textContent = `День не закрыт: осталось ${formatUnfinishedCount(
+      dayResult.unfinishedTodos,
+    )}.`;
+    return;
+  }
+
   if (todos.length === 0) {
     summary.classList.add("is-neutral");
     summaryText.textContent =
@@ -385,6 +539,47 @@ function updateSummary() {
 
   summary.classList.add("is-warning");
   summaryText.textContent = `Дела не закрыты: осталось ${formatUnfinishedCount(unfinishedCount)}.`;
+}
+
+function updateProgress() {
+  const totalCount = todos.length;
+  const completedCount = getCompletedCount();
+  const progressPercent = totalCount === 0 ? 0 : Math.round((completedCount / totalCount) * 100);
+
+  progressText.textContent = `Выполнено: ${completedCount} из ${totalCount}`;
+  progressTrack.setAttribute("aria-valuenow", String(progressPercent));
+  progressBar.style.width = `${progressPercent}%`;
+
+  if (dayResult?.closed) {
+    finishDayButton.textContent = "День завершен";
+  } else {
+    finishDayButton.textContent = "Завершить день";
+  }
+
+  finishDayButton.disabled = !canFinishDay();
+}
+
+function canFinishDay() {
+  return canEditTodos() && todos.length > 0 && !dayResult?.closed;
+}
+
+function createDayResult() {
+  const totalTodos = todos.length;
+  const completedTodos = getCompletedCount();
+  const unfinishedTodos = totalTodos - completedTodos;
+
+  return {
+    closed: true,
+    status: unfinishedTodos === 0 ? "completed" : "incomplete",
+    totalTodos,
+    completedTodos,
+    unfinishedTodos,
+    closedAt: new Date().toISOString(),
+  };
+}
+
+function getCompletedCount() {
+  return todos.filter((todo) => todo.completed).length;
 }
 
 function canEditTodos() {
@@ -421,6 +616,19 @@ function unsubscribeFromTodos() {
   }
 
   unsubscribeTodos = null;
+}
+
+function unsubscribeFromDay() {
+  if (typeof unsubscribeDay === "function") {
+    unsubscribeDay();
+  }
+
+  unsubscribeDay = null;
+}
+
+function unsubscribeFromCloudData() {
+  unsubscribeFromTodos();
+  unsubscribeFromDay();
 }
 
 function formatUnfinishedCount(count) {

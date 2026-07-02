@@ -46,6 +46,27 @@
           <button class="primary-button" type="submit">Добавить</button>
         </form>
 
+        <section class="progress-panel" aria-label="Прогресс дня">
+          <div class="progress-content">
+            <span class="summary-title">Прогресс</span>
+            <p class="progress-text" id="progress-text">Выполнено: 0 из 0</p>
+            <div
+              class="progress-track"
+              role="progressbar"
+              aria-label="Прогресс выполнения дел"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuenow="0"
+              id="progress-track"
+            >
+              <span class="progress-bar" id="progress-bar"></span>
+            </div>
+          </div>
+          <button class="primary-button finish-button" id="finish-day-button" type="button">
+            Завершить день
+          </button>
+        </section>
+
         <ul class="todo-list" id="todo-list" aria-label="Дела на сегодня"></ul>
 
         <p class="empty-state" id="empty-state">Пока нет дел. Добавьте первое дело на сегодня.</p>
