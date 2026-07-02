@@ -40,9 +40,12 @@ const progressText = document.querySelector("#progress-text");
 const progressTrack = document.querySelector("#progress-track");
 const progressBar = document.querySelector("#progress-bar");
 const finishDayButton = document.querySelector("#finish-day-button");
+const themeToggleButton = document.querySelector("#theme-toggle-button");
 
 const AUTO_FINISH_HOUR = 22;
 const AUTO_FINISH_CHECK_INTERVAL_MS = 60_000;
+const THEME_STORAGE_KEY = "dailyTodoTheme";
+const THEMES = new Set(["light", "dark"]);
 
 let selectedDateKey = getTodayKey();
 
@@ -57,6 +60,7 @@ let autoFinishTimer = null;
 let autoFinishCheckQueued = false;
 let isAutoFinishing = false;
 
+initializeTheme();
 initializeDateControls();
 startAutoFinishTimer();
 
@@ -149,7 +153,7 @@ list.addEventListener("submit", async (event) => {
     await addSubtask(subtaskForm.dataset.parentId, text);
     subtaskInput.value = "";
   } catch (error) {
-    showError("Не удалось добавить поддело.", error);
+    showError("Не удалось добавить подзадачу.", error);
   } finally {
     setSubtaskFormBusy(subtaskForm, false);
   }
@@ -186,6 +190,10 @@ logoutButton.addEventListener("click", async () => {
   } finally {
     logoutButton.disabled = false;
   }
+});
+
+themeToggleButton.addEventListener("click", () => {
+  applyTheme(themeToggleButton.dataset.nextTheme);
 });
 
 finishDayButton.addEventListener("click", async () => {
@@ -698,6 +706,24 @@ function saveLocalDayResult() {
   localStorage.setItem(getLocalDayResultKey(), JSON.stringify(dayResult));
 }
 
+function initializeTheme() {
+  applyTheme(localStorage.getItem(THEME_STORAGE_KEY));
+}
+
+function applyTheme(theme) {
+  const normalizedTheme = THEMES.has(theme) ? theme : "light";
+
+  document.documentElement.dataset.theme = normalizedTheme;
+  localStorage.setItem(THEME_STORAGE_KEY, normalizedTheme);
+
+  const nextTheme = normalizedTheme === "dark" ? "light" : "dark";
+  const nextThemeLabel = nextTheme === "dark" ? "тёмную" : "светлую";
+
+  themeToggleButton.dataset.nextTheme = nextTheme;
+  themeToggleButton.setAttribute("aria-label", `Включить ${nextThemeLabel} тему`);
+  themeToggleButton.title = `Включить ${nextThemeLabel} тему`;
+}
+
 function render() {
   updateDateControls();
   setTodoEditingEnabled(canEditTodos());
@@ -777,7 +803,7 @@ function createSubtaskElement(todo, subtask) {
   checkbox.dataset.action = "toggle-subtask";
   checkbox.dataset.parentId = todo.id;
   checkbox.dataset.id = subtask.id;
-  checkbox.setAttribute("aria-label", `Отметить поддело: ${subtask.text}`);
+  checkbox.setAttribute("aria-label", `Отметить подзадачу: ${subtask.text}`);
 
   const text = document.createElement("span");
   text.className = "subtask-text";
@@ -791,7 +817,7 @@ function createSubtaskElement(todo, subtask) {
   deleteButton.dataset.action = "delete-subtask";
   deleteButton.dataset.parentId = todo.id;
   deleteButton.dataset.id = subtask.id;
-  deleteButton.setAttribute("aria-label", `Удалить поддело: ${subtask.text}`);
+  deleteButton.setAttribute("aria-label", `Удалить подзадачу: ${subtask.text}`);
   deleteButton.title = "Удалить";
 
   checkboxLabel.append(checkbox);
@@ -809,7 +835,7 @@ function createSubtaskForm(todo) {
   const label = document.createElement("label");
   label.className = "visually-hidden";
   label.htmlFor = `subtask-input-${todo.id}`;
-  label.textContent = `Новое поддело для: ${todo.text}`;
+  label.textContent = `Новая подзадача для: ${todo.text}`;
 
   const input = document.createElement("input");
   input.className = "subtask-input";
@@ -817,7 +843,7 @@ function createSubtaskForm(todo) {
   input.type = "text";
   input.autocomplete = "off";
   input.maxLength = 400;
-  input.placeholder = "Добавить поддело";
+  input.placeholder = "Добавить подзадачу";
   input.disabled = !canEditTodos();
   input.dataset.role = "subtask-input";
 
@@ -833,7 +859,7 @@ function createSubtaskForm(todo) {
 }
 
 function updateProgress() {
-  const stats = getWorkItemStats();
+  const stats = getProgressStats();
   const totalCount = dayResult?.closed ? dayResult.totalTodos : stats.total;
   const completedCount = dayResult?.closed ? dayResult.completedTodos : stats.completed;
   const progressPercent = getProgressPercent(completedCount, totalCount);
@@ -869,11 +895,11 @@ function getProgressPercent(completedCount, totalCount) {
 }
 
 function canFinishDay() {
-  return canEditTodos() && getWorkItemStats().total > 0 && !dayResult?.closed;
+  return canEditTodos() && todos.length > 0 && !dayResult?.closed;
 }
 
 function createDayResult() {
-  const { total: totalTodos, completed: completedTodos } = getWorkItemStats();
+  const { total: totalTodos, completed: completedTodos } = getProgressStats();
   const unfinishedTodos = totalTodos - completedTodos;
 
   return {
@@ -886,24 +912,30 @@ function createDayResult() {
   };
 }
 
-function getWorkItemStats() {
-  return todos.reduce(
-    (stats, todo) => ({
-      total: stats.total + 1,
-      completed: stats.completed + getTodoCompletionWeight(todo),
-    }),
-    { total: 0, completed: 0 },
-  );
+function getProgressStats() {
+  if (todos.length === 0) {
+    return { total: 0, completed: 0 };
+  }
+
+  return {
+    total: 100,
+    completed: todos.reduce(
+      (completedPercent, todo) => completedPercent + getTodoCompletionPercent(todo, todos.length),
+      0,
+    ),
+  };
 }
 
-function getTodoCompletionWeight(todo) {
+function getTodoCompletionPercent(todo, totalTodos) {
+  const todoPercent = 100 / totalTodos;
+
   if (todo.subtasks.length === 0) {
-    return todo.completed ? 1 : 0;
+    return todo.completed ? todoPercent : 0;
   }
 
   const completedSubtasks = todo.subtasks.filter((subtask) => subtask.completed).length;
 
-  return completedSubtasks / todo.subtasks.length;
+  return (completedSubtasks / todo.subtasks.length) * todoPercent;
 }
 
 function getSubtaskDrivenCompletion(subtasks, fallbackCompleted) {

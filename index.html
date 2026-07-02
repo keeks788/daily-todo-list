@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="ru" data-theme="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -52,7 +52,19 @@
                 id="account-menu-panel"
                 aria-label="Профиль"
               >
-                <span class="auth-label">Профиль</span>
+                <div class="account-dropdown-header">
+                  <span class="auth-label">Профиль</span>
+                  <button
+                    class="theme-toggle-button"
+                    id="theme-toggle-button"
+                    type="button"
+                    data-next-theme="dark"
+                    aria-label="Включить тёмную тему"
+                    title="Включить тёмную тему"
+                  >
+                    <span class="theme-toggle-icon" aria-hidden="true"></span>
+                  </button>
+                </div>
                 <p class="auth-status" id="auth-status">Проверяем подключение...</p>
                 <button class="secondary-button" id="login-button" type="button">
                   Войти через Google
