@@ -394,8 +394,17 @@ async function addTodo(text) {
 async function toggleTodo(id, completed) {
   requireEditableDay();
 
+  const todoToUpdate = findTodo(id);
+
+  if (!todoToUpdate) {
+    throw new Error("Todo was not found.");
+  }
+
+  const subtasks = todoToUpdate.subtasks.map((subtask) => ({ ...subtask, completed }));
+  const updates = { completed, subtasks };
+
   if (appMode === "local") {
-    todos = todos.map((todo) => (todo.id === id ? { ...todo, completed } : todo));
+    todos = todos.map((todo) => (todo.id === id ? { ...todo, ...updates } : todo));
     clearLocalDayResultIfClosed();
     saveLocalTodos();
     render();
@@ -407,7 +416,7 @@ async function toggleTodo(id, completed) {
   await firebaseServices.setDoc(
     todoDocument(currentUser.uid, id),
     {
-      completed,
+      ...updates,
       updatedAt: firebaseServices.serverTimestamp(),
     },
     { merge: true },
@@ -451,7 +460,7 @@ async function addSubtask(parentId, text) {
     },
   ];
 
-  await updateTodoSubtasks(parentId, subtasks);
+  await updateTodoSubtasks(parentId, subtasks, false);
 }
 
 async function toggleSubtask(parentId, subtaskId, completed) {
@@ -466,8 +475,9 @@ async function toggleSubtask(parentId, subtaskId, completed) {
   const subtasks = parentTodo.subtasks.map((subtask) =>
     subtask.id === subtaskId ? { ...subtask, completed } : subtask,
   );
+  const todoCompleted = getSubtaskDrivenCompletion(subtasks, parentTodo.completed);
 
-  await updateTodoSubtasks(parentId, subtasks);
+  await updateTodoSubtasks(parentId, subtasks, todoCompleted);
 }
 
 async function deleteSubtask(parentId, subtaskId) {
@@ -480,13 +490,14 @@ async function deleteSubtask(parentId, subtaskId) {
   }
 
   const subtasks = parentTodo.subtasks.filter((subtask) => subtask.id !== subtaskId);
+  const todoCompleted = getSubtaskDrivenCompletion(subtasks, parentTodo.completed);
 
-  await updateTodoSubtasks(parentId, subtasks);
+  await updateTodoSubtasks(parentId, subtasks, todoCompleted);
 }
 
-async function updateTodoSubtasks(parentId, subtasks) {
+async function updateTodoSubtasks(parentId, subtasks, completed) {
   if (appMode === "local") {
-    todos = todos.map((todo) => (todo.id === parentId ? { ...todo, subtasks } : todo));
+    todos = todos.map((todo) => (todo.id === parentId ? { ...todo, completed, subtasks } : todo));
     clearLocalDayResultIfClosed();
     saveLocalTodos();
     render();
@@ -498,6 +509,7 @@ async function updateTodoSubtasks(parentId, subtasks) {
   await firebaseServices.setDoc(
     todoDocument(currentUser.uid, parentId),
     {
+      completed,
       subtasks,
       updatedAt: firebaseServices.serverTimestamp(),
     },
@@ -599,11 +611,13 @@ function todoDocument(userId, todoId) {
 }
 
 function normalizeTodo(id, data) {
+  const subtasks = normalizeSubtasks(data.subtasks);
+
   return {
     id,
     text: typeof data.text === "string" ? data.text : "",
-    completed: Boolean(data.completed),
-    subtasks: normalizeSubtasks(data.subtasks),
+    completed: getSubtaskDrivenCompletion(subtasks, Boolean(data.completed)),
+    subtasks,
   };
 }
 
@@ -828,10 +842,10 @@ function updateProgress() {
   progressBar.style.width = `${progressPercent}%`;
 
   if (dayResult?.closed) {
-    progressText.textContent = `День завершён: выполнено ${progressPercent}% (${completedCount} из ${totalCount})`;
+    progressText.textContent = `День завершён: выполнено ${progressPercent}%`;
     finishDayButton.textContent = "День завершён";
   } else {
-    progressText.textContent = `Выполнено: ${completedCount} из ${totalCount}`;
+    progressText.textContent = `Выполнено: ${progressPercent}%`;
     finishDayButton.textContent = "Завершить день";
   }
 
@@ -864,7 +878,7 @@ function createDayResult() {
 
   return {
     closed: true,
-    status: unfinishedTodos === 0 ? "completed" : "incomplete",
+    status: completedTodos >= totalTodos ? "completed" : "incomplete",
     totalTodos,
     completedTodos,
     unfinishedTodos,
@@ -874,16 +888,30 @@ function createDayResult() {
 
 function getWorkItemStats() {
   return todos.reduce(
-    (stats, todo) => {
-      const completedSubtasks = todo.subtasks.filter((subtask) => subtask.completed).length;
-
-      return {
-        total: stats.total + 1 + todo.subtasks.length,
-        completed: stats.completed + (todo.completed ? 1 : 0) + completedSubtasks,
-      };
-    },
+    (stats, todo) => ({
+      total: stats.total + 1,
+      completed: stats.completed + getTodoCompletionWeight(todo),
+    }),
     { total: 0, completed: 0 },
   );
+}
+
+function getTodoCompletionWeight(todo) {
+  if (todo.subtasks.length === 0) {
+    return todo.completed ? 1 : 0;
+  }
+
+  const completedSubtasks = todo.subtasks.filter((subtask) => subtask.completed).length;
+
+  return completedSubtasks / todo.subtasks.length;
+}
+
+function getSubtaskDrivenCompletion(subtasks, fallbackCompleted) {
+  if (subtasks.length === 0) {
+    return fallbackCompleted;
+  }
+
+  return subtasks.every((subtask) => subtask.completed);
 }
 
 function findTodo(id) {
