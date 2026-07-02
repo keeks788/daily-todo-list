@@ -2,8 +2,10 @@ import { initializeApp } from "firebase/app";
 import {
   getAuth,
   GoogleAuthProvider,
+  getRedirectResult,
   onAuthStateChanged,
   signInWithPopup,
+  signInWithRedirect,
   signOut,
 } from "firebase/auth";
 import {
@@ -168,6 +170,11 @@ loginButton.addEventListener("click", async () => {
   loginButton.disabled = true;
 
   try {
+    if (shouldUseRedirectSignIn()) {
+      await firebaseServices.signInWithRedirect(firebaseServices.auth, firebaseServices.provider);
+      return;
+    }
+
     await firebaseServices.signInWithPopup(firebaseServices.auth, firebaseServices.provider);
   } catch (error) {
     showError("Не удалось войти через Google. Проверьте Firebase Authentication.", error);
@@ -274,11 +281,24 @@ function setupCloudMode() {
   updateAccountMenuLabel("Войти");
   showAuthMessage("Войдите через Google, чтобы загрузить дела из облака.");
   setTodoEditingEnabled(false);
+  processRedirectSignInResult();
 
   firebaseServices.onAuthStateChanged(firebaseServices.auth, (user) => {
     currentUser = user;
     handleAuthStateChange(user);
   });
+}
+
+async function processRedirectSignInResult() {
+  try {
+    await firebaseServices.getRedirectResult(firebaseServices.auth);
+  } catch (error) {
+    showError("Не удалось завершить вход через Google.", error);
+  }
+}
+
+function shouldUseRedirectSignIn() {
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 }
 
 function handleAuthStateChange(user) {
@@ -1169,7 +1189,9 @@ function loadFirebaseServices() {
     query,
     serverTimestamp,
     setDoc,
+    getRedirectResult,
     signInWithPopup,
+    signInWithRedirect,
     signOut,
   };
 }
