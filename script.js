@@ -1,15 +1,30 @@
+import { initializeApp } from "firebase/app";
+import {
+  getAuth,
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  signInWithPopup,
+  signOut,
+} from "firebase/auth";
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getFirestore,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  setDoc,
+} from "firebase/firestore";
 import { firebaseConfig, isFirebaseConfigured } from "./firebase-config.js";
-
-const FIREBASE_VERSION = "12.15.0";
 
 const form = document.querySelector("#todo-form");
 const input = document.querySelector("#todo-input");
-const addButton = document.querySelector(".primary-button");
+const addButton = document.querySelector("#add-todo-button");
 const list = document.querySelector("#todo-list");
 const emptyState = document.querySelector("#empty-state");
-const summary = document.querySelector("#day-summary");
-const summaryText = document.querySelector("#summary-text");
-const todayLabel = document.querySelector("#today-label");
+const selectedDateInput = document.querySelector("#selected-date-input");
 const authStatus = document.querySelector("#auth-status");
 const loginButton = document.querySelector("#login-button");
 const logoutButton = document.querySelector("#logout-button");
@@ -26,9 +41,10 @@ const progressTrack = document.querySelector("#progress-track");
 const progressBar = document.querySelector("#progress-bar");
 const finishDayButton = document.querySelector("#finish-day-button");
 
-const todayKey = new Date().toLocaleDateString("sv-SE");
-const localStorageKey = `daily-todos:${todayKey}`;
-const localDayResultKey = `daily-day-result:${todayKey}`;
+const AUTO_FINISH_HOUR = 22;
+const AUTO_FINISH_CHECK_INTERVAL_MS = 60_000;
+
+let selectedDateKey = getTodayKey();
 
 let todos = [];
 let dayResult = null;
@@ -37,18 +53,21 @@ let currentUser = null;
 let firebaseServices = null;
 let unsubscribeTodos = null;
 let unsubscribeDay = null;
+let autoFinishTimer = null;
+let autoFinishCheckQueued = false;
+let isAutoFinishing = false;
 
-todayLabel.textContent = new Intl.DateTimeFormat("ru-RU", {
-  weekday: "long",
-  day: "numeric",
-  month: "long",
-  year: "numeric",
-}).format(new Date());
+initializeDateControls();
+startAutoFinishTimer();
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
 
   const text = input.value.trim();
+
+  if (!canEditTodos()) {
+    return;
+  }
 
   if (!text) {
     input.focus();
@@ -147,6 +166,10 @@ finishDayButton.addEventListener("click", async () => {
 
 input.addEventListener("input", resizeTodoInput);
 
+selectedDateInput.addEventListener("change", () => {
+  changeSelectedDate(selectedDateInput.value);
+});
+
 accountMenuButton.addEventListener("click", () => {
   setAccountMenuOpen(accountMenuPanel.classList.contains("is-hidden"));
 });
@@ -237,6 +260,31 @@ function handleAuthStateChange(user) {
   subscribeToTodos(user.uid);
 }
 
+function changeSelectedDate(dateKey) {
+  selectedDateKey = normalizeSelectedDateKey(dateKey);
+  updateDateControls();
+  unsubscribeFromCloudData();
+
+  if (appMode === "local") {
+    todos = loadLocalTodos();
+    dayResult = loadLocalDayResult();
+    render();
+    resizeTodoInput();
+    return;
+  }
+
+  if (!currentUser) {
+    todos = [];
+    dayResult = null;
+    render();
+    return;
+  }
+
+  showAuthMessage("Загружаем выбранный день из облака...");
+  subscribeToDay(currentUser.uid);
+  subscribeToTodos(currentUser.uid);
+}
+
 function subscribeToDay(userId) {
   unsubscribeDay = firebaseServices.onSnapshot(
     dayDocument(userId),
@@ -274,6 +322,8 @@ function subscribeToTodos(userId) {
 }
 
 async function addTodo(text) {
+  requireEditableDay();
+
   const todo = {
     id: crypto.randomUUID(),
     text,
@@ -301,6 +351,8 @@ async function addTodo(text) {
 }
 
 async function toggleTodo(id, completed) {
+  requireEditableDay();
+
   if (appMode === "local") {
     todos = todos.map((todo) => (todo.id === id ? { ...todo, completed } : todo));
     clearLocalDayResultIfClosed();
@@ -324,6 +376,8 @@ async function toggleTodo(id, completed) {
 }
 
 async function deleteTodo(id) {
+  requireEditableDay();
+
   if (appMode === "local") {
     todos = todos.filter((todo) => todo.id !== id);
     clearLocalDayResultIfClosed();
@@ -339,6 +393,8 @@ async function deleteTodo(id) {
 }
 
 async function finishDay() {
+  requireEditableDay();
+
   const result = createDayResult();
 
   if (appMode === "local") {
@@ -385,7 +441,13 @@ function clearLocalDayResultIfClosed() {
   }
 
   dayResult = null;
-  localStorage.removeItem(localDayResultKey);
+  localStorage.removeItem(getLocalDayResultKey());
+}
+
+function requireEditableDay() {
+  if (!canEditTodos()) {
+    throw new Error("Selected day is read-only.");
+  }
 }
 
 function requireSignedInUser() {
@@ -400,13 +462,13 @@ function todosCollection(userId) {
     "users",
     userId,
     "days",
-    todayKey,
+    selectedDateKey,
     "todos",
   );
 }
 
 function dayDocument(userId) {
-  return firebaseServices.doc(firebaseServices.db, "users", userId, "days", todayKey);
+  return firebaseServices.doc(firebaseServices.db, "users", userId, "days", selectedDateKey);
 }
 
 function todoDocument(userId, todoId) {
@@ -415,7 +477,7 @@ function todoDocument(userId, todoId) {
     "users",
     userId,
     "days",
-    todayKey,
+    selectedDateKey,
     "todos",
     todoId,
   );
@@ -449,7 +511,7 @@ function normalizeDayResult(data) {
 }
 
 function loadLocalTodos() {
-  const savedTodos = localStorage.getItem(localStorageKey);
+  const savedTodos = localStorage.getItem(getLocalTodosKey());
 
   if (!savedTodos) {
     return [];
@@ -464,11 +526,11 @@ function loadLocalTodos() {
 }
 
 function saveLocalTodos() {
-  localStorage.setItem(localStorageKey, JSON.stringify(todos));
+  localStorage.setItem(getLocalTodosKey(), JSON.stringify(todos));
 }
 
 function loadLocalDayResult() {
-  const savedResult = localStorage.getItem(localDayResultKey);
+  const savedResult = localStorage.getItem(getLocalDayResultKey());
 
   if (!savedResult) {
     return null;
@@ -482,19 +544,22 @@ function loadLocalDayResult() {
 }
 
 function saveLocalDayResult() {
-  localStorage.setItem(localDayResultKey, JSON.stringify(dayResult));
+  localStorage.setItem(getLocalDayResultKey(), JSON.stringify(dayResult));
 }
 
 function render() {
+  updateDateControls();
+  setTodoEditingEnabled(canEditTodos());
   list.innerHTML = "";
 
   for (const todo of todos) {
     list.append(createTodoElement(todo));
   }
 
+  emptyState.textContent = getEmptyStateText();
   emptyState.classList.toggle("is-hidden", todos.length > 0);
   updateProgress();
-  updateSummary();
+  queueAutoFinishCheck();
 }
 
 function createTodoElement(todo) {
@@ -532,60 +597,39 @@ function createTodoElement(todo) {
   return item;
 }
 
-function updateSummary() {
-  summary.className = "day-summary";
-
-  if (dayResult?.closed) {
-    if (dayResult.status === "completed") {
-      summary.classList.add("is-success");
-      summaryText.textContent = "День закрыт: все дела выполнены.";
-      return;
-    }
-
-    summary.classList.add("is-warning");
-    summaryText.textContent = `День не закрыт: осталось ${formatUnfinishedCount(
-      dayResult.unfinishedTodos,
-    )}.`;
-    return;
-  }
-
-  if (todos.length === 0) {
-    summary.classList.add("is-neutral");
-    summaryText.textContent =
-      appMode === "cloud" && !currentUser
-        ? "Войдите, чтобы увидеть дела на сегодня."
-        : "Добавьте дела, чтобы вечером увидеть итог дня.";
-    return;
-  }
-
-  const unfinishedCount = todos.filter((todo) => !todo.completed).length;
-
-  if (unfinishedCount === 0) {
-    summary.classList.add("is-success");
-    summaryText.textContent = "Все дела на сегодня выполнены.";
-    return;
-  }
-
-  summary.classList.add("is-warning");
-  summaryText.textContent = `Дела не закрыты: осталось ${formatUnfinishedCount(unfinishedCount)}.`;
-}
-
 function updateProgress() {
-  const totalCount = todos.length;
-  const completedCount = getCompletedCount();
-  const progressPercent = totalCount === 0 ? 0 : Math.round((completedCount / totalCount) * 100);
+  const totalCount = dayResult?.closed ? dayResult.totalTodos : todos.length;
+  const completedCount = dayResult?.closed ? dayResult.completedTodos : getCompletedCount();
+  const progressPercent = getProgressPercent(completedCount, totalCount);
 
-  progressText.textContent = `Выполнено: ${completedCount} из ${totalCount}`;
   progressTrack.setAttribute("aria-valuenow", String(progressPercent));
   progressBar.style.width = `${progressPercent}%`;
 
   if (dayResult?.closed) {
-    finishDayButton.textContent = "День завершен";
+    progressText.textContent = `День завершён: выполнено ${progressPercent}% (${completedCount} из ${totalCount})`;
+    finishDayButton.textContent = "День завершён";
   } else {
+    progressText.textContent = `Выполнено: ${completedCount} из ${totalCount}`;
     finishDayButton.textContent = "Завершить день";
   }
 
   finishDayButton.disabled = !canFinishDay();
+}
+
+function getEmptyStateText() {
+  if (!isSelectedToday()) {
+    return "За выбранный день нет дел.";
+  }
+
+  if (appMode === "cloud" && !currentUser) {
+    return "Войдите, чтобы увидеть свои дела.";
+  }
+
+  return "Пока нет дел. Добавьте первое дело на сегодня.";
+}
+
+function getProgressPercent(completedCount, totalCount) {
+  return totalCount === 0 ? 0 : Math.round((completedCount / totalCount) * 100);
 }
 
 function canFinishDay() {
@@ -612,7 +656,117 @@ function getCompletedCount() {
 }
 
 function canEditTodos() {
-  return appMode === "local" || Boolean(currentUser);
+  return isSelectedToday() && (appMode === "local" || Boolean(currentUser));
+}
+
+function initializeDateControls() {
+  selectedDateInput.value = selectedDateKey;
+  updateDateControls();
+}
+
+function updateDateControls() {
+  const todayKey = getTodayKey();
+  selectedDateInput.max = todayKey;
+  selectedDateInput.value = selectedDateKey;
+
+  selectedDateInput.title = isSelectedToday()
+    ? "Выбрать день"
+    : `История за ${formatDisplayDate(selectedDateKey)}`;
+}
+
+function normalizeSelectedDateKey(dateKey) {
+  const todayKey = getTodayKey();
+
+  if (!isDateKey(dateKey)) {
+    return selectedDateKey;
+  }
+
+  return dateKey > todayKey ? todayKey : dateKey;
+}
+
+function isDateKey(dateKey) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(dateKey);
+}
+
+function isSelectedToday() {
+  return selectedDateKey === getTodayKey();
+}
+
+function getTodayKey() {
+  return new Date().toLocaleDateString("sv-SE");
+}
+
+function getLocalTodosKey() {
+  return `daily-todos:${selectedDateKey}`;
+}
+
+function getLocalDayResultKey() {
+  return `daily-day-result:${selectedDateKey}`;
+}
+
+function formatDisplayDate(dateKey) {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+
+  return new Intl.DateTimeFormat("ru-RU", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(date);
+}
+
+function startAutoFinishTimer() {
+  stopAutoFinishTimer();
+  autoFinishTimer = window.setInterval(autoFinishDayIfNeeded, AUTO_FINISH_CHECK_INTERVAL_MS);
+}
+
+function stopAutoFinishTimer() {
+  if (autoFinishTimer) {
+    window.clearInterval(autoFinishTimer);
+  }
+
+  autoFinishTimer = null;
+}
+
+function queueAutoFinishCheck() {
+  if (autoFinishCheckQueued) {
+    return;
+  }
+
+  autoFinishCheckQueued = true;
+
+  window.setTimeout(async () => {
+    autoFinishCheckQueued = false;
+    await autoFinishDayIfNeeded();
+  }, 0);
+}
+
+async function autoFinishDayIfNeeded() {
+  if (!shouldAutoFinishDay()) {
+    return;
+  }
+
+  isAutoFinishing = true;
+
+  try {
+    await finishDay();
+    showAuthMessage("Итог дня подведён автоматически после 22:00.");
+  } catch (error) {
+    showError("Не удалось автоматически подвести итог дня.", error);
+    render();
+  } finally {
+    isAutoFinishing = false;
+  }
+}
+
+function shouldAutoFinishDay() {
+  return (
+    isSelectedToday() &&
+    new Date().getHours() >= AUTO_FINISH_HOUR &&
+    canFinishDay() &&
+    !isAutoFinishing
+  );
 }
 
 function setTodoEditingEnabled(isEnabled) {
@@ -693,32 +847,26 @@ function formatUnfinishedCount(count) {
   return `${count} дел`;
 }
 
-async function loadFirebaseServices() {
-  const [{ initializeApp }, authModule, firestoreModule] = await Promise.all([
-    import(`https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/firebase-app.js`),
-    import(`https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/firebase-auth.js`),
-    import(`https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/firebase-firestore.js`),
-  ]);
-
+function loadFirebaseServices() {
   const app = initializeApp(firebaseConfig);
-  const auth = authModule.getAuth(app);
-  const db = firestoreModule.getFirestore(app);
-  const provider = new authModule.GoogleAuthProvider();
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  const provider = new GoogleAuthProvider();
 
   return {
     auth,
     db,
     provider,
-    signInWithPopup: authModule.signInWithPopup,
-    signOut: authModule.signOut,
-    onAuthStateChanged: authModule.onAuthStateChanged,
-    collection: firestoreModule.collection,
-    deleteDoc: firestoreModule.deleteDoc,
-    doc: firestoreModule.doc,
-    onSnapshot: firestoreModule.onSnapshot,
-    orderBy: firestoreModule.orderBy,
-    query: firestoreModule.query,
-    serverTimestamp: firestoreModule.serverTimestamp,
-    setDoc: firestoreModule.setDoc,
+    collection,
+    deleteDoc,
+    doc,
+    onAuthStateChanged,
+    onSnapshot,
+    orderBy,
+    query,
+    serverTimestamp,
+    setDoc,
+    signInWithPopup,
+    signOut,
   };
 }

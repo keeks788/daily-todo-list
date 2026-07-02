@@ -1,0 +1,21 @@
+{
+  "name": "daily-todo-list",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "pnpm@11.7.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check"
+  },
+  "dependencies": {
+    "firebase": "^12.15.0"
+  },
+  "devDependencies": {
+    "prettier": "^3.6.2",
+    "vite": "^7.0.0"
+  }
+}
