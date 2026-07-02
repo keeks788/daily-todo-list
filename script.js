@@ -17,6 +17,10 @@ const profilePanel = document.querySelector("#profile-panel");
 const profileName = document.querySelector("#profile-name");
 const profileEmail = document.querySelector("#profile-email");
 const setupNotice = document.querySelector("#setup-notice");
+const accountMenu = document.querySelector("#account-menu");
+const accountMenuButton = document.querySelector("#account-menu-button");
+const accountMenuLabel = document.querySelector("#account-menu-label");
+const accountMenuPanel = document.querySelector("#account-menu-panel");
 const progressText = document.querySelector("#progress-text");
 const progressTrack = document.querySelector("#progress-track");
 const progressBar = document.querySelector("#progress-bar");
@@ -56,6 +60,7 @@ form.addEventListener("submit", async (event) => {
   try {
     await addTodo(text);
     input.value = "";
+    resizeTodoInput();
   } catch (error) {
     showError("Не удалось добавить дело. Проверьте подключение и настройки Firebase.", error);
   } finally {
@@ -140,6 +145,24 @@ finishDayButton.addEventListener("click", async () => {
   }
 });
 
+input.addEventListener("input", resizeTodoInput);
+
+accountMenuButton.addEventListener("click", () => {
+  setAccountMenuOpen(accountMenuPanel.classList.contains("is-hidden"));
+});
+
+document.addEventListener("click", (event) => {
+  if (!accountMenu.contains(event.target)) {
+    setAccountMenuOpen(false);
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    setAccountMenuOpen(false);
+  }
+});
+
 initializeAppMode();
 
 async function initializeAppMode() {
@@ -166,15 +189,19 @@ function enableLocalMode() {
   loginButton.disabled = true;
   logoutButton.disabled = true;
   profilePanel.classList.add("is-hidden");
+  loginButton.classList.remove("is-hidden");
+  updateAccountMenuLabel("Локально");
   showAuthMessage("Локальный режим: данные сохраняются только в этом браузере.");
   setTodoEditingEnabled(true);
   render();
+  resizeTodoInput();
 }
 
 function setupCloudMode() {
   appMode = "cloud";
   setupNotice.classList.add("is-hidden");
   loginButton.disabled = false;
+  updateAccountMenuLabel("Войти");
   showAuthMessage("Войдите через Google, чтобы загрузить дела из облака.");
   setTodoEditingEnabled(false);
 
@@ -192,6 +219,7 @@ function handleAuthStateChange(user) {
     dayResult = null;
     loginButton.classList.remove("is-hidden");
     profilePanel.classList.add("is-hidden");
+    updateAccountMenuLabel("Войти");
     showAuthMessage("Войдите через Google, чтобы работать со своим списком.");
     setTodoEditingEnabled(false);
     render();
@@ -202,6 +230,7 @@ function handleAuthStateChange(user) {
   profilePanel.classList.remove("is-hidden");
   profileName.textContent = user.displayName || "Пользователь";
   profileEmail.textContent = user.email || "";
+  updateAccountMenuLabel(user.displayName || "Профиль");
   showAuthMessage("Загружаем дела из облака...");
   setTodoEditingEnabled(true);
   subscribeToDay(user.uid);
@@ -599,6 +628,20 @@ function setFormBusy(isBusy) {
 
   input.disabled = isBusy;
   addButton.disabled = isBusy;
+}
+
+function resizeTodoInput() {
+  input.style.height = "auto";
+  input.style.height = `${input.scrollHeight}px`;
+}
+
+function setAccountMenuOpen(isOpen) {
+  accountMenuPanel.classList.toggle("is-hidden", !isOpen);
+  accountMenuButton.setAttribute("aria-expanded", String(isOpen));
+}
+
+function updateAccountMenuLabel(label) {
+  accountMenuLabel.textContent = label;
 }
 
 function showAuthMessage(message) {
