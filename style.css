@@ -135,27 +135,29 @@ h1 {
   align-items: center;
 }
 
+.date-controls {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+
 .calendar-menu,
 .account-menu {
   position: relative;
   z-index: 5;
 }
 
-.calendar-menu {
+.calendar-menu,
+.calendar-button,
+.day-nav-button {
   width: 44px;
   height: 44px;
   flex: 0 0 44px;
 }
 
 .calendar-icon {
-  position: absolute;
-  inset: 0;
   display: grid;
   place-items: center;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text-main);
-  background: var(--surface-bg);
   pointer-events: none;
 }
 
@@ -168,31 +170,32 @@ h1 {
   border-radius: 4px;
 }
 
-.calendar-menu:hover .calendar-icon,
-.calendar-menu:focus-within .calendar-icon {
-  border-color: var(--accent);
-  color: var(--accent);
+.day-nav-button::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-top: 2px solid currentColor;
+  border-right: 2px solid currentColor;
 }
 
-.calendar-menu:focus-within .calendar-icon {
-  box-shadow: 0 0 0 4px var(--accent-soft);
+.day-nav-button--previous::before {
+  transform: rotate(225deg);
+}
+
+.day-nav-button--next::before {
+  transform: rotate(45deg);
 }
 
 .calendar-input {
   position: absolute;
-  inset: 0;
-  width: 44px;
-  height: 44px;
+  right: 0;
+  bottom: 0;
+  width: 1px;
+  height: 1px;
   padding: 0;
   border: 0;
   opacity: 0;
-  cursor: pointer;
-}
-
-.calendar-input::-webkit-calendar-picker-indicator {
-  width: 44px;
-  height: 44px;
-  cursor: pointer;
+  pointer-events: none;
 }
 
 .account-menu-button {
@@ -220,6 +223,30 @@ h1 {
   height: 10px;
   border-radius: 999px;
   background: var(--accent);
+}
+
+.account-gear-icon {
+  display: none;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.account-gear-icon::before {
+  content: "⚙";
+}
+
+.account-menu.is-signed-in .account-menu-button {
+  width: 44px;
+  padding: 0;
+}
+
+.account-menu.is-signed-in .account-dot,
+.account-menu.is-signed-in #account-menu-label {
+  display: none;
+}
+
+.account-menu.is-signed-in .account-gear-icon {
+  display: block;
 }
 
 #account-menu-label {
@@ -668,6 +695,28 @@ h1 {
   display: none;
 }
 
+.seo-description {
+  display: grid;
+  gap: 8px;
+  margin-top: 28px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.seo-description h2 {
+  margin: 0;
+  color: var(--text-main);
+  font-size: 17px;
+  line-height: 1.35;
+}
+
+.seo-description p {
+  margin: 0;
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -702,8 +751,15 @@ h1 {
   .header-actions {
     width: 100%;
     display: grid;
-    grid-template-columns: 44px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) minmax(44px, auto);
     align-items: start;
+  }
+
+  .date-controls {
+    display: grid;
+    grid-template-columns: 44px 44px 44px;
+    gap: 8px;
+    justify-content: start;
   }
 
   .calendar-menu {
@@ -716,6 +772,11 @@ h1 {
 
   .account-menu-button {
     width: 100%;
+  }
+
+  .account-menu.is-signed-in .account-menu-button {
+    justify-self: end;
+    width: 44px;
   }
 
   .account-dropdown {

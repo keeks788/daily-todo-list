@@ -5,7 +5,12 @@ const input = document.querySelector("#todo-input");
 const addButton = document.querySelector("#add-todo-button");
 const list = document.querySelector("#todo-list");
 const emptyState = document.querySelector("#empty-state");
+const selectedDateLabel = document.querySelector("#selected-date-label");
 const selectedDateInput = document.querySelector("#selected-date-input");
+const calendarButton = document.querySelector("#calendar-button");
+const previousDayButton = document.querySelector("#previous-day-button");
+const nextDayButton = document.querySelector("#next-day-button");
+const calendarStatus = document.querySelector("#calendar-status");
 const authStatus = document.querySelector("#auth-status");
 const loginButton = document.querySelector("#login-button");
 const logoutButton = document.querySelector("#logout-button");
@@ -32,12 +37,21 @@ const LANGUAGES = new Set(["ru", "en"]);
 
 const TRANSLATIONS = {
   ru: {
+    documentTitle: "Daily To-Do List — онлайн-планировщик задач",
     appTitle: "Список дел на сегодня",
     profile: "Профиль",
     signInLabel: "Войти",
     localModeLabel: "Локально",
     userFallback: "Пользователь",
     chooseDay: "Выбрать день",
+    dateControls: "Навигация по дням",
+    previousDay: "Предыдущий день",
+    nextDay: "Следующий день",
+    selectedDate: "Дата: {date}",
+    openProfileMenu: "Открыть профиль",
+    calendarTodayStatus: "Выбран сегодняшний день",
+    calendarPastStatus: "Выбран день из истории: {date}",
+    calendarFutureStatus: "Запланированный день: {date}",
     historyFor: "История за {date}",
     plannedFor: "План на {date}",
     progress: "Прогресс",
@@ -92,12 +106,21 @@ const TRANSLATIONS = {
     delete: "Удалить",
   },
   en: {
+    documentTitle: "Daily To-Do List — online task planner",
     appTitle: "Today’s todo list",
     profile: "Profile",
     signInLabel: "Sign in",
     localModeLabel: "Local",
     userFallback: "User",
     chooseDay: "Choose day",
+    dateControls: "Day navigation",
+    previousDay: "Previous day",
+    nextDay: "Next day",
+    selectedDate: "Date: {date}",
+    openProfileMenu: "Open profile",
+    calendarTodayStatus: "Selected date: today",
+    calendarPastStatus: "Selected past date: {date}",
+    calendarFutureStatus: "Planned date: {date}",
     historyFor: "History for {date}",
     plannedFor: "Plan for {date}",
     progress: "Progress",
@@ -326,6 +349,18 @@ finishDayButton.addEventListener("click", async () => {
 
 input.addEventListener("input", resizeTodoInput);
 
+previousDayButton.addEventListener("click", () => {
+  shiftSelectedDate(-1);
+});
+
+nextDayButton.addEventListener("click", () => {
+  shiftSelectedDate(1);
+});
+
+calendarButton.addEventListener("click", () => {
+  openDatePicker();
+});
+
 selectedDateInput.addEventListener("pointerdown", () => {
   setAccountMenuOpen(false);
 });
@@ -381,7 +416,7 @@ function enableLocalMode() {
   logoutButton.disabled = true;
   profilePanel.classList.add("is-hidden");
   loginButton.classList.remove("is-hidden");
-  updateAccountMenuLabel(t("localModeLabel"));
+  updateAccountLabelForState();
   showAuthMessage("localModeMessage");
   setTodoEditingEnabled(true);
   render();
@@ -392,7 +427,7 @@ function setupCloudMode() {
   appMode = "cloud";
   setupNotice.classList.add("is-hidden");
   loginButton.disabled = false;
-  updateAccountMenuLabel(t("signInLabel"));
+  updateAccountLabelForState();
   showAuthMessage("signInOrLocalMessage");
   setTodoEditingEnabled(true);
 
@@ -418,7 +453,7 @@ async function handleAuthStateChange(user) {
     dayResult = loadLocalDayResult();
     loginButton.classList.remove("is-hidden");
     profilePanel.classList.add("is-hidden");
-    updateAccountMenuLabel(t("signInLabel"));
+    updateAccountLabelForState();
     showAuthMessage("signInOrLocalMessage");
     setTodoEditingEnabled(true);
     render();
@@ -430,7 +465,7 @@ async function handleAuthStateChange(user) {
   profilePanel.classList.remove("is-hidden");
   profileName.textContent = user.displayName || t("userFallback");
   profileEmail.textContent = user.email || "";
-  updateAccountMenuLabel(user.displayName || t("profile"));
+  updateAccountLabelForState();
   showAuthMessage("loadingCloudTodos");
   setTodoEditingEnabled(false);
   render();
@@ -891,7 +926,7 @@ function updateLanguageToggle() {
 }
 
 function updateStaticText() {
-  document.title = t("appTitle");
+  document.title = t("documentTitle");
   setText("#app-title", t("appTitle"));
   setText(".auth-label", t("profile"));
   setText(".summary-title", t("progress"));
@@ -900,10 +935,10 @@ function updateStaticText() {
   setText("#login-button", t("loginWithGoogle"));
   setText("#logout-button", t("signOut"));
   setText("#setup-notice", t("setupNotice"));
+  setDateControlsLabel();
 
   input.placeholder = t("todoPlaceholder");
   emptyState.textContent = getEmptyStateText();
-  selectedDateInput.setAttribute("aria-label", t("chooseDay"));
   list.setAttribute("aria-label", t("todayTodos"));
   progressTrack.setAttribute("aria-label", t("progressAria"));
   accountMenuPanel.setAttribute("aria-label", t("profile"));
@@ -916,13 +951,19 @@ function updateStaticText() {
 
 function updateAccountLabelForState() {
   if (currentUser) {
-    updateAccountMenuLabel(currentUser.displayName || t("profile"));
+    accountMenu.classList.add("is-signed-in");
+    updateAccountMenuLabel(t("profile"));
+    accountMenuButton.setAttribute("aria-label", t("openProfileMenu"));
+    accountMenuButton.title = t("openProfileMenu");
     return;
   }
 
-  updateAccountMenuLabel(
-    appMode === "local" && !firebaseServices ? t("localModeLabel") : t("signInLabel"),
-  );
+  accountMenu.classList.remove("is-signed-in");
+  const label = appMode === "local" && !firebaseServices ? t("localModeLabel") : t("signInLabel");
+
+  updateAccountMenuLabel(label);
+  accountMenuButton.setAttribute("aria-label", label);
+  accountMenuButton.title = label;
 }
 
 function setText(selector, value) {
@@ -1203,16 +1244,65 @@ function initializeDateControls() {
 }
 
 function updateDateControls() {
-  selectedDateInput.removeAttribute("max");
-  selectedDateInput.value = selectedDateKey;
+  const calendarStatusText = getCalendarStatusText();
+  const calendarTitle = `${t("chooseDay")}. ${calendarStatusText}`;
+  const locale = getCurrentLocale();
 
-  if (isSelectedToday()) {
-    selectedDateInput.title = t("chooseDay");
-    return;
+  selectedDateInput.removeAttribute("max");
+  selectedDateInput.lang = locale;
+  selectedDateInput.value = selectedDateKey;
+  selectedDateInput.title = calendarTitle;
+  selectedDateInput.setAttribute("aria-label", calendarTitle);
+  calendarButton.lang = locale;
+  calendarButton.title = calendarTitle;
+  calendarButton.setAttribute("aria-label", calendarTitle);
+  calendarStatus.textContent = calendarStatusText;
+  selectedDateLabel.textContent = t("selectedDate", { date: formatDisplayDate(selectedDateKey) });
+  previousDayButton.setAttribute("aria-label", t("previousDay"));
+  previousDayButton.title = t("previousDay");
+  nextDayButton.setAttribute("aria-label", t("nextDay"));
+  nextDayButton.title = t("nextDay");
+}
+
+function setDateControlsLabel() {
+  const dateControls = document.querySelector(".date-controls");
+
+  if (dateControls) {
+    dateControls.setAttribute("aria-label", t("dateControls"));
+  }
+}
+
+function shiftSelectedDate(offsetDays) {
+  setAccountMenuOpen(false);
+  void changeSelectedDate(addDaysToDateKey(selectedDateKey, offsetDays));
+}
+
+function openDatePicker() {
+  setAccountMenuOpen(false);
+  selectedDateInput.lang = getCurrentLocale();
+  selectedDateInput.focus({ preventScroll: true });
+
+  if (typeof selectedDateInput.showPicker === "function") {
+    try {
+      selectedDateInput.showPicker();
+      return;
+    } catch {
+      selectedDateInput.click();
+      return;
+    }
   }
 
-  const titleKey = isSelectedPast() ? "historyFor" : "plannedFor";
-  selectedDateInput.title = t(titleKey, { date: formatDisplayDate(selectedDateKey) });
+  selectedDateInput.click();
+}
+
+function getCalendarStatusText() {
+  if (isSelectedToday()) {
+    return t("calendarTodayStatus");
+  }
+
+  const statusKey = isSelectedPast() ? "calendarPastStatus" : "calendarFutureStatus";
+
+  return t(statusKey, { date: formatDisplayDate(selectedDateKey) });
 }
 
 function normalizeSelectedDateKey(dateKey) {
@@ -1236,7 +1326,20 @@ function isSelectedPast() {
 }
 
 function getTodayKey() {
-  return new Date().toLocaleDateString("sv-SE");
+  return formatDateKey(new Date());
+}
+
+function addDaysToDateKey(dateKey, offsetDays) {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+
+  date.setDate(date.getDate() + offsetDays);
+
+  return formatDateKey(date);
+}
+
+function formatDateKey(date) {
+  return date.toLocaleDateString("sv-SE");
 }
 
 function getLocalTodosKey() {
@@ -1251,12 +1354,16 @@ function formatDisplayDate(dateKey) {
   const [year, month, day] = dateKey.split("-").map(Number);
   const date = new Date(year, month - 1, day);
 
-  return new Intl.DateTimeFormat(currentLanguage === "ru" ? "ru-RU" : "en-US", {
+  return new Intl.DateTimeFormat(getCurrentLocale(), {
     weekday: "long",
     day: "numeric",
     month: "long",
     year: "numeric",
   }).format(date);
+}
+
+function getCurrentLocale() {
+  return currentLanguage === "ru" ? "ru-RU" : "en-US";
 }
 
 function startAutoFinishTimer() {

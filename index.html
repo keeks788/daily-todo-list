@@ -3,8 +3,29 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Список дел на сегодня</title>
+    <title>Daily To-Do List — онлайн-планировщик задач</title>
+    <meta
+      name="description"
+      content="Daily To-Do List — простой онлайн-планировщик задач с подзадачами, прогрессом и календарём. Plan daily tasks, subtasks, and progress online."
+    />
+    <meta name="robots" content="index, follow" />
     <meta name="theme-color" content="#2563eb" />
+    <link rel="canonical" href="https://daily-to-do-list-3006d.web.app/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Daily To-Do List" />
+    <meta
+      property="og:description"
+      content="Simple online to-do list and daily task planner with subtasks, progress, and calendar."
+    />
+    <meta property="og:url" content="https://daily-to-do-list-3006d.web.app/" />
+    <meta property="og:image" content="https://daily-to-do-list-3006d.web.app/icon-512.png" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Daily To-Do List" />
+    <meta
+      name="twitter:description"
+      content="Simple online to-do list and daily task planner with subtasks, progress, and calendar."
+    />
+    <meta name="twitter:image" content="https://daily-to-do-list-3006d.web.app/icon-512.png" />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
@@ -19,6 +40,23 @@
         }
       }
     </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Daily To-Do List",
+        "applicationCategory": "ProductivityApplication",
+        "operatingSystem": "Web",
+        "url": "https://daily-to-do-list-3006d.web.app/",
+        "description": "Simple online to-do list and daily task planner with subtasks, progress, and calendar.",
+        "inLanguage": ["en", "ru"],
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        }
+      }
+    </script>
   </head>
   <body>
     <main class="app">
@@ -29,15 +67,44 @@
           </div>
 
           <div class="header-actions">
-            <div class="calendar-menu">
-              <span class="calendar-icon" aria-hidden="true"></span>
-              <input
-                class="calendar-input"
-                id="selected-date-input"
-                type="date"
-                aria-label="Выбрать день"
-                title="Выбрать день"
-              />
+            <div class="date-controls" aria-label="Навигация по дням">
+              <button
+                class="icon-toggle-button day-nav-button day-nav-button--previous"
+                id="previous-day-button"
+                type="button"
+                aria-label="Предыдущий день"
+                title="Предыдущий день"
+              ></button>
+
+              <div class="calendar-menu">
+                <button
+                  class="icon-toggle-button calendar-button"
+                  id="calendar-button"
+                  type="button"
+                  aria-label="Выбрать день"
+                  aria-describedby="calendar-status"
+                  title="Выбрать день"
+                >
+                  <span class="calendar-icon" aria-hidden="true"></span>
+                </button>
+                <input
+                  class="calendar-input"
+                  id="selected-date-input"
+                  type="date"
+                  aria-label="Выбрать день"
+                  aria-describedby="calendar-status"
+                  title="Выбрать день"
+                />
+                <span class="visually-hidden" id="calendar-status">Выбран сегодняшний день</span>
+              </div>
+
+              <button
+                class="icon-toggle-button day-nav-button day-nav-button--next"
+                id="next-day-button"
+                type="button"
+                aria-label="Следующий день"
+                title="Следующий день"
+              ></button>
             </div>
 
             <div class="account-menu" id="account-menu">
@@ -49,6 +116,7 @@
                 aria-controls="account-menu-panel"
               >
                 <span class="account-dot" aria-hidden="true"></span>
+                <span class="account-gear-icon" aria-hidden="true"></span>
                 <span id="account-menu-label">Профиль</span>
               </button>
 
@@ -139,6 +207,20 @@
         <ul class="todo-list" id="todo-list" aria-label="Дела на сегодня"></ul>
 
         <p class="empty-state" id="empty-state">Пока нет дел. Добавьте первое дело на сегодня.</p>
+
+        <p class="selected-date-label" id="selected-date-label" aria-live="polite"></p>
+
+        <section class="seo-description" aria-label="Описание сервиса">
+          <h2>Daily To-Do List — онлайн-планировщик задач</h2>
+          <p>
+            Создавайте задачи на сегодня и будущие дни, добавляйте подзадачи, отслеживайте прогресс
+            и завершайте день с итогом выполнения.
+          </p>
+          <p>
+            Daily To-Do List is a simple online task planner for daily todos, subtasks, progress
+            tracking, and calendar planning.
+          </p>
+        </section>
       </section>
     </main>
 
