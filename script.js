@@ -1,22 +1,3 @@
-import { initializeApp } from "firebase/app";
-import {
-  getAuth,
-  GoogleAuthProvider,
-  onAuthStateChanged,
-  signInWithPopup,
-  signOut,
-} from "firebase/auth";
-import {
-  collection,
-  deleteDoc,
-  doc,
-  getFirestore,
-  onSnapshot,
-  orderBy,
-  query,
-  serverTimestamp,
-  setDoc,
-} from "firebase/firestore";
 import { firebaseConfig, isFirebaseConfigured } from "./firebase-config.js";
 
 const form = document.querySelector("#todo-form");
@@ -354,7 +335,7 @@ selectedDateInput.addEventListener("focus", () => {
 });
 
 selectedDateInput.addEventListener("change", () => {
-  changeSelectedDate(selectedDateInput.value);
+  void changeSelectedDate(selectedDateInput.value);
 });
 
 accountMenuButton.addEventListener("click", () => {
@@ -417,7 +398,7 @@ function setupCloudMode() {
 
   firebaseServices.onAuthStateChanged(firebaseServices.auth, (user) => {
     currentUser = user;
-    handleAuthStateChange(user);
+    void handleAuthStateChange(user);
   });
 }
 
@@ -429,7 +410,7 @@ function getSignInErrorMessage(error) {
   return t("signInFailed");
 }
 
-function handleAuthStateChange(user) {
+async function handleAuthStateChange(user) {
   unsubscribeFromCloudData();
 
   if (!user) {
@@ -451,12 +432,23 @@ function handleAuthStateChange(user) {
   profileEmail.textContent = user.email || "";
   updateAccountMenuLabel(user.displayName || t("profile"));
   showAuthMessage("loadingCloudTodos");
-  setTodoEditingEnabled(true);
-  subscribeToDay(user.uid);
-  subscribeToTodos(user.uid);
+  setTodoEditingEnabled(false);
+  render();
+
+  try {
+    await ensureFirestoreServices();
+    setTodoEditingEnabled(true);
+    subscribeToDay(user.uid);
+    subscribeToTodos(user.uid);
+  } catch (error) {
+    showError(t("firebaseLoadFailed"), error);
+    todos = [];
+    dayResult = null;
+    render();
+  }
 }
 
-function changeSelectedDate(dateKey) {
+async function changeSelectedDate(dateKey) {
   selectedDateKey = normalizeSelectedDateKey(dateKey);
   updateDateControls();
   unsubscribeFromCloudData();
@@ -470,8 +462,20 @@ function changeSelectedDate(dateKey) {
   }
 
   showAuthMessage("loadingSelectedDay");
-  subscribeToDay(currentUser.uid);
-  subscribeToTodos(currentUser.uid);
+  setTodoEditingEnabled(false);
+  render();
+
+  try {
+    await ensureFirestoreServices();
+    setTodoEditingEnabled(true);
+    subscribeToDay(currentUser.uid);
+    subscribeToTodos(currentUser.uid);
+  } catch (error) {
+    showError(t("firebaseLoadFailed"), error);
+    todos = [];
+    dayResult = null;
+    render();
+  }
 }
 
 function subscribeToDay(userId) {
@@ -1183,7 +1187,10 @@ function findTodo(id) {
 }
 
 function canEditTodos() {
-  return !isSelectedPast() && (usesLocalStorage() || Boolean(currentUser));
+  return (
+    !isSelectedPast() &&
+    (usesLocalStorage() || Boolean(currentUser && firebaseServices?.firestoreReady))
+  );
 }
 
 function usesLocalStorage() {
@@ -1310,7 +1317,7 @@ function shouldAutoFinishDay(todayKey) {
     autoFinishDateKey < todayKey &&
     todos.length > 0 &&
     !dayResult?.closed &&
-    (usesLocalStorage() || Boolean(currentUser))
+    (usesLocalStorage() || Boolean(currentUser && firebaseServices?.firestoreReady))
   );
 }
 
@@ -1410,26 +1417,46 @@ function formatUnfinishedCount(count) {
   return `${count} дел`;
 }
 
-function loadFirebaseServices() {
-  const app = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
-  const db = getFirestore(app);
-  const provider = new GoogleAuthProvider();
+async function loadFirebaseServices() {
+  const [appModule, authModule] = await Promise.all([
+    import("firebase/app"),
+    import("firebase/auth"),
+  ]);
+
+  const app = appModule.initializeApp(firebaseConfig);
 
   return {
-    auth,
-    db,
-    provider,
-    collection,
-    deleteDoc,
-    doc,
-    onAuthStateChanged,
-    onSnapshot,
-    orderBy,
-    query,
-    serverTimestamp,
-    setDoc,
-    signInWithPopup,
-    signOut,
+    app,
+    auth: authModule.getAuth(app),
+    provider: new authModule.GoogleAuthProvider(),
+    firestoreReady: false,
+    onAuthStateChanged: authModule.onAuthStateChanged,
+    signInWithPopup: authModule.signInWithPopup,
+    signOut: authModule.signOut,
   };
+}
+
+async function ensureFirestoreServices() {
+  if (firebaseServices?.firestoreReady) {
+    return;
+  }
+
+  if (!firebaseServices?.app) {
+    throw new Error("Firebase app is not initialized.");
+  }
+
+  const firestoreModule = await import("firebase/firestore");
+
+  Object.assign(firebaseServices, {
+    db: firestoreModule.getFirestore(firebaseServices.app),
+    collection: firestoreModule.collection,
+    deleteDoc: firestoreModule.deleteDoc,
+    doc: firestoreModule.doc,
+    firestoreReady: true,
+    onSnapshot: firestoreModule.onSnapshot,
+    orderBy: firestoreModule.orderBy,
+    query: firestoreModule.query,
+    serverTimestamp: firestoreModule.serverTimestamp,
+    setDoc: firestoreModule.setDoc,
+  });
 }
