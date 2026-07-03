@@ -253,6 +253,13 @@ h1 {
   justify-content: space-between;
 }
 
+.account-controls {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
 .auth-label {
   display: block;
   color: var(--text-main);
@@ -261,7 +268,7 @@ h1 {
   text-transform: uppercase;
 }
 
-.theme-toggle-button {
+.icon-toggle-button {
   width: 36px;
   height: 36px;
   display: grid;
@@ -273,15 +280,21 @@ h1 {
   background: var(--surface-bg);
 }
 
-.theme-toggle-button:hover,
-.theme-toggle-button:focus-visible {
+.icon-toggle-button:hover,
+.icon-toggle-button:focus-visible {
   border-color: var(--accent);
   color: var(--accent);
 }
 
-.theme-toggle-button:focus-visible {
+.icon-toggle-button:focus-visible {
   outline: none;
   box-shadow: 0 0 0 4px var(--accent-soft);
+}
+
+.language-toggle-button {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0;
 }
 
 .theme-toggle-icon {
@@ -690,26 +703,31 @@ h1 {
     width: 100%;
     display: grid;
     grid-template-columns: 44px minmax(0, 1fr);
+    align-items: start;
   }
 
-  .account-menu,
+  .calendar-menu {
+    align-self: start;
+  }
+
+  .account-menu {
+    display: contents;
+  }
+
   .account-menu-button {
     width: 100%;
   }
 
   .account-dropdown {
     position: static;
+    grid-column: 1 / -1;
     width: 100%;
     margin-top: 10px;
   }
 
   .account-dropdown-header {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .theme-toggle-button {
-    align-self: flex-end;
+    align-items: center;
+    flex-direction: row;
   }
 
   .secondary-button,

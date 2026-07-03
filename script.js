@@ -41,12 +41,133 @@ const progressTrack = document.querySelector("#progress-track");
 const progressBar = document.querySelector("#progress-bar");
 const finishDayButton = document.querySelector("#finish-day-button");
 const themeToggleButton = document.querySelector("#theme-toggle-button");
+const languageToggleButton = document.querySelector("#language-toggle-button");
 
 const AUTO_FINISH_HOUR = 22;
 const AUTO_FINISH_CHECK_INTERVAL_MS = 60_000;
 const THEME_STORAGE_KEY = "dailyTodoTheme";
+const LANGUAGE_STORAGE_KEY = "dailyTodoLanguage";
 const THEMES = new Set(["light", "dark"]);
+const LANGUAGES = new Set(["ru", "en"]);
 
+const TRANSLATIONS = {
+  ru: {
+    appTitle: "Список дел на сегодня",
+    profile: "Профиль",
+    signInLabel: "Войти",
+    localModeLabel: "Локально",
+    userFallback: "Пользователь",
+    chooseDay: "Выбрать день",
+    historyFor: "История за {date}",
+    progress: "Прогресс",
+    progressAria: "Прогресс выполнения дел",
+    completed: "Выполнено: {percent}%",
+    dayCompleted: "День завершён: выполнено {percent}%",
+    finishDay: "Завершить день",
+    finishedDay: "День завершён",
+    newTodo: "Новое дело",
+    todoPlaceholder: "Например: разобрать почту",
+    add: "Добавить",
+    loginWithGoogle: "Войти через Google",
+    signOut: "Выйти",
+    todayTodos: "Дела на сегодня",
+    noTodosForDay: "За выбранный день нет дел.",
+    emptyToday: "Пока нет дел. Добавьте первое дело на сегодня.",
+    setupNotice:
+      "Облачная синхронизация пока не настроена. Дела временно сохраняются только в этом браузере.",
+    checkingConnection: "Проверяем подключение...",
+    localModeMessage: "Локальный режим: данные сохраняются только в этом браузере.",
+    signInOrLocalMessage: "Войдите через Google или работайте локально в этом браузере.",
+    missingFirebaseConfig: "Сначала вставьте Firebase config в firebase-config.js.",
+    addTodoFailed: "Не удалось добавить дело. Проверьте подключение и настройки Firebase.",
+    updateTodoFailed: "Не удалось обновить дело.",
+    deleteTodoFailed: "Не удалось удалить дело.",
+    addSubtaskFailed: "Не удалось добавить подзадачу.",
+    signInFailed:
+      "Не удалось войти через Google. Можно продолжить работу локально в этом браузере.",
+    signInPopupFailed:
+      "Не удалось открыть окно входа. Можно продолжить работу локально в этом браузере.",
+    signOutFailed: "Не удалось выйти из профиля.",
+    finishDayFailed: "Не удалось завершить день. Проверьте подключение к базе.",
+    firebaseLoadFailed: "Firebase SDK не загрузился. Временно используем локальное сохранение.",
+    loadingCloudTodos: "Загружаем дела из облака...",
+    loadingSelectedDay: "Загружаем выбранный день из облака...",
+    dayResultLoadFailed: "Не удалось загрузить итог дня. Проверьте Firestore rules.",
+    synced: "Синхронизировано с облаком.",
+    databaseAccessFailed: "Нет доступа к базе. Проверьте Firestore и security rules.",
+    autoFinished: "Итог дня подведён автоматически после 22:00.",
+    autoFinishFailed: "Не удалось автоматически подвести итог дня.",
+    enableDarkTheme: "Включить тёмную тему",
+    enableLightTheme: "Включить светлую тему",
+    switchToEnglish: "Switch to English",
+    switchToRussian: "Переключить на русский",
+    markTodo: "Отметить дело: {text}",
+    deleteTodo: "Удалить дело: {text}",
+    markSubtask: "Отметить подзадачу: {text}",
+    deleteSubtask: "Удалить подзадачу: {text}",
+    newSubtaskFor: "Новая подзадача для: {text}",
+    addSubtask: "Добавить подзадачу",
+    delete: "Удалить",
+  },
+  en: {
+    appTitle: "Today’s todo list",
+    profile: "Profile",
+    signInLabel: "Sign in",
+    localModeLabel: "Local",
+    userFallback: "User",
+    chooseDay: "Choose day",
+    historyFor: "History for {date}",
+    progress: "Progress",
+    progressAria: "Todo progress",
+    completed: "Completed: {percent}%",
+    dayCompleted: "Day finished: {percent}% complete",
+    finishDay: "Finish day",
+    finishedDay: "Day finished",
+    newTodo: "New todo",
+    todoPlaceholder: "For example: review email",
+    add: "Add",
+    loginWithGoogle: "Sign in with Google",
+    signOut: "Sign out",
+    todayTodos: "Today’s todos",
+    noTodosForDay: "There are no todos for the selected day.",
+    emptyToday: "No todos yet. Add your first todo for today.",
+    setupNotice: "Cloud sync is not configured yet. Todos are saved only in this browser.",
+    checkingConnection: "Checking connection...",
+    localModeMessage: "Local mode: data is saved only in this browser.",
+    signInOrLocalMessage: "Sign in with Google or keep working locally in this browser.",
+    missingFirebaseConfig: "Add Firebase config to firebase-config.js first.",
+    addTodoFailed: "Could not add todo. Check your connection and Firebase settings.",
+    updateTodoFailed: "Could not update todo.",
+    deleteTodoFailed: "Could not delete todo.",
+    addSubtaskFailed: "Could not add subtask.",
+    signInFailed: "Could not sign in with Google. You can keep working locally in this browser.",
+    signInPopupFailed:
+      "Could not open the sign-in window. You can keep working locally in this browser.",
+    signOutFailed: "Could not sign out.",
+    finishDayFailed: "Could not finish the day. Check the database connection.",
+    firebaseLoadFailed: "Firebase SDK did not load. Falling back to local storage.",
+    loadingCloudTodos: "Loading cloud todos...",
+    loadingSelectedDay: "Loading selected day from the cloud...",
+    dayResultLoadFailed: "Could not load the day result. Check Firestore rules.",
+    synced: "Synced with cloud.",
+    databaseAccessFailed: "No database access. Check Firestore and security rules.",
+    autoFinished: "The day was finished automatically after 22:00.",
+    autoFinishFailed: "Could not automatically finish the day.",
+    enableDarkTheme: "Enable dark theme",
+    enableLightTheme: "Enable light theme",
+    switchToEnglish: "Switch to English",
+    switchToRussian: "Переключить на русский",
+    markTodo: "Mark todo: {text}",
+    deleteTodo: "Delete todo: {text}",
+    markSubtask: "Mark subtask: {text}",
+    deleteSubtask: "Delete subtask: {text}",
+    newSubtaskFor: "New subtask for: {text}",
+    addSubtask: "Add subtask",
+    delete: "Delete",
+  },
+};
+
+let currentLanguage = getInitialLanguage();
 let selectedDateKey = getTodayKey();
 
 let todos = [];
@@ -60,6 +181,7 @@ let autoFinishTimer = null;
 let autoFinishCheckQueued = false;
 let isAutoFinishing = false;
 
+initializeLanguage();
 initializeTheme();
 initializeDateControls();
 startAutoFinishTimer();
@@ -85,7 +207,7 @@ form.addEventListener("submit", async (event) => {
     input.value = "";
     resizeTodoInput();
   } catch (error) {
-    showError("Не удалось добавить дело. Проверьте подключение и настройки Firebase.", error);
+    showError(t("addTodoFailed"), error);
   } finally {
     setFormBusy(false);
   }
@@ -106,7 +228,7 @@ list.addEventListener("change", async (event) => {
 
     await toggleTodo(checkbox.dataset.id, checkbox.checked);
   } catch (error) {
-    showError("Не удалось обновить дело.", error);
+    showError(t("updateTodoFailed"), error);
     checkbox.checked = !checkbox.checked;
   }
 });
@@ -126,7 +248,7 @@ list.addEventListener("click", async (event) => {
 
     await deleteTodo(button.dataset.id);
   } catch (error) {
-    showError("Не удалось удалить дело.", error);
+    showError(t("deleteTodoFailed"), error);
   }
 });
 
@@ -153,7 +275,7 @@ list.addEventListener("submit", async (event) => {
     await addSubtask(subtaskForm.dataset.parentId, text);
     subtaskInput.value = "";
   } catch (error) {
-    showError("Не удалось добавить подзадачу.", error);
+    showError(t("addSubtaskFailed"), error);
   } finally {
     setSubtaskFormBusy(subtaskForm, false);
   }
@@ -161,7 +283,7 @@ list.addEventListener("submit", async (event) => {
 
 loginButton.addEventListener("click", async () => {
   if (!firebaseServices) {
-    showAuthMessage("Сначала вставьте Firebase config в firebase-config.js.");
+    showAuthMessage(t("missingFirebaseConfig"));
     return;
   }
 
@@ -186,7 +308,7 @@ logoutButton.addEventListener("click", async () => {
   try {
     await firebaseServices.signOut(firebaseServices.auth);
   } catch (error) {
-    showError("Не удалось выйти из профиля.", error);
+    showError(t("signOutFailed"), error);
   } finally {
     logoutButton.disabled = false;
   }
@@ -194,6 +316,10 @@ logoutButton.addEventListener("click", async () => {
 
 themeToggleButton.addEventListener("click", () => {
   applyTheme(themeToggleButton.dataset.nextTheme);
+});
+
+languageToggleButton.addEventListener("click", () => {
+  applyLanguage(languageToggleButton.dataset.nextLanguage);
 });
 
 finishDayButton.addEventListener("click", async () => {
@@ -206,12 +332,20 @@ finishDayButton.addEventListener("click", async () => {
   try {
     await finishDay();
   } catch (error) {
-    showError("Не удалось завершить день. Проверьте подключение к базе.", error);
+    showError(t("finishDayFailed"), error);
     render();
   }
 });
 
 input.addEventListener("input", resizeTodoInput);
+
+selectedDateInput.addEventListener("pointerdown", () => {
+  setAccountMenuOpen(false);
+});
+
+selectedDateInput.addEventListener("focus", () => {
+  setAccountMenuOpen(false);
+});
 
 selectedDateInput.addEventListener("change", () => {
   changeSelectedDate(selectedDateInput.value);
@@ -245,7 +379,7 @@ async function initializeAppMode() {
     firebaseServices = await loadFirebaseServices();
     setupCloudMode();
   } catch (error) {
-    showError("Firebase SDK не загрузился. Временно используем локальное сохранение.", error);
+    showError(t("firebaseLoadFailed"), error);
     enableLocalMode();
   }
 }
@@ -260,8 +394,8 @@ function enableLocalMode() {
   logoutButton.disabled = true;
   profilePanel.classList.add("is-hidden");
   loginButton.classList.remove("is-hidden");
-  updateAccountMenuLabel("Локально");
-  showAuthMessage("Локальный режим: данные сохраняются только в этом браузере.");
+  updateAccountMenuLabel(t("localModeLabel"));
+  showAuthMessage(t("localModeMessage"));
   setTodoEditingEnabled(true);
   render();
   resizeTodoInput();
@@ -271,8 +405,8 @@ function setupCloudMode() {
   appMode = "cloud";
   setupNotice.classList.add("is-hidden");
   loginButton.disabled = false;
-  updateAccountMenuLabel("Войти");
-  showAuthMessage("Войдите через Google или работайте локально в этом браузере.");
+  updateAccountMenuLabel(t("signInLabel"));
+  showAuthMessage(t("signInOrLocalMessage"));
   setTodoEditingEnabled(true);
 
   firebaseServices.onAuthStateChanged(firebaseServices.auth, (user) => {
@@ -283,10 +417,10 @@ function setupCloudMode() {
 
 function getSignInErrorMessage(error) {
   if (error?.code === "auth/popup-blocked" || error?.code === "auth/popup-closed-by-user") {
-    return "Не удалось открыть окно входа. Можно продолжить работу локально в этом браузере.";
+    return t("signInPopupFailed");
   }
 
-  return "Не удалось войти через Google. Можно продолжить работу локально в этом браузере.";
+  return t("signInFailed");
 }
 
 function handleAuthStateChange(user) {
@@ -297,8 +431,8 @@ function handleAuthStateChange(user) {
     dayResult = loadLocalDayResult();
     loginButton.classList.remove("is-hidden");
     profilePanel.classList.add("is-hidden");
-    updateAccountMenuLabel("Войти");
-    showAuthMessage("Войдите через Google или работайте локально в этом браузере.");
+    updateAccountMenuLabel(t("signInLabel"));
+    showAuthMessage(t("signInOrLocalMessage"));
     setTodoEditingEnabled(true);
     render();
     resizeTodoInput();
@@ -307,10 +441,10 @@ function handleAuthStateChange(user) {
 
   loginButton.classList.add("is-hidden");
   profilePanel.classList.remove("is-hidden");
-  profileName.textContent = user.displayName || "Пользователь";
+  profileName.textContent = user.displayName || t("userFallback");
   profileEmail.textContent = user.email || "";
-  updateAccountMenuLabel(user.displayName || "Профиль");
-  showAuthMessage("Загружаем дела из облака...");
+  updateAccountMenuLabel(user.displayName || t("profile"));
+  showAuthMessage(t("loadingCloudTodos"));
   setTodoEditingEnabled(true);
   subscribeToDay(user.uid);
   subscribeToTodos(user.uid);
@@ -329,7 +463,7 @@ function changeSelectedDate(dateKey) {
     return;
   }
 
-  showAuthMessage("Загружаем выбранный день из облака...");
+  showAuthMessage(t("loadingSelectedDay"));
   subscribeToDay(currentUser.uid);
   subscribeToTodos(currentUser.uid);
 }
@@ -342,7 +476,7 @@ function subscribeToDay(userId) {
       render();
     },
     (error) => {
-      showError("Не удалось загрузить итог дня. Проверьте Firestore rules.", error);
+      showError(t("dayResultLoadFailed"), error);
       dayResult = null;
       render();
     },
@@ -359,11 +493,11 @@ function subscribeToTodos(userId) {
     todosQuery,
     (snapshot) => {
       todos = snapshot.docs.map((document) => normalizeTodo(document.id, document.data()));
-      showAuthMessage("Синхронизировано с облаком.");
+      showAuthMessage(t("synced"));
       render();
     },
     (error) => {
-      showError("Нет доступа к базе. Проверьте Firestore и security rules.", error);
+      showError(t("databaseAccessFailed"), error);
       todos = [];
       render();
     },
@@ -708,6 +842,92 @@ function saveLocalDayResult() {
   localStorage.setItem(getLocalDayResultKey(), JSON.stringify(dayResult));
 }
 
+function initializeLanguage() {
+  applyLanguage(currentLanguage);
+}
+
+function applyLanguage(language) {
+  currentLanguage = LANGUAGES.has(language) ? language : getBrowserLanguage();
+  document.documentElement.lang = currentLanguage;
+  localStorage.setItem(LANGUAGE_STORAGE_KEY, currentLanguage);
+  updateLanguageToggle();
+  updateStaticText();
+
+  if (list.childElementCount > 0) {
+    render();
+  }
+}
+
+function getInitialLanguage() {
+  const savedLanguage = localStorage.getItem(LANGUAGE_STORAGE_KEY);
+
+  return LANGUAGES.has(savedLanguage) ? savedLanguage : getBrowserLanguage();
+}
+
+function getBrowserLanguage() {
+  return navigator.language?.toLowerCase().startsWith("ru") ? "ru" : "en";
+}
+
+function updateLanguageToggle() {
+  const nextLanguage = currentLanguage === "ru" ? "en" : "ru";
+  const label = nextLanguage === "ru" ? t("switchToRussian") : t("switchToEnglish");
+
+  languageToggleButton.dataset.nextLanguage = nextLanguage;
+  languageToggleButton.textContent = nextLanguage.toUpperCase();
+  languageToggleButton.setAttribute("aria-label", label);
+  languageToggleButton.title = label;
+}
+
+function updateStaticText() {
+  document.title = t("appTitle");
+  setText("#app-title", t("appTitle"));
+  setText(".auth-label", t("profile"));
+  setText(".summary-title", t("progress"));
+  setText("label[for='todo-input']", t("newTodo"));
+  setText("#add-todo-button", t("add"));
+  setText("#login-button", t("loginWithGoogle"));
+  setText("#logout-button", t("signOut"));
+  setText("#setup-notice", t("setupNotice"));
+
+  input.placeholder = t("todoPlaceholder");
+  selectedDateInput.setAttribute("aria-label", t("chooseDay"));
+  list.setAttribute("aria-label", t("todayTodos"));
+  progressTrack.setAttribute("aria-label", t("progressAria"));
+  accountMenuPanel.setAttribute("aria-label", t("profile"));
+  updateThemeToggle(document.documentElement.dataset.theme || "light");
+  updateAccountLabelForState();
+  updateDateControls();
+  updateProgress();
+}
+
+function updateAccountLabelForState() {
+  if (currentUser) {
+    updateAccountMenuLabel(currentUser.displayName || t("profile"));
+    return;
+  }
+
+  updateAccountMenuLabel(
+    appMode === "local" && !firebaseServices ? t("localModeLabel") : t("signInLabel"),
+  );
+}
+
+function setText(selector, value) {
+  const element = document.querySelector(selector);
+
+  if (element) {
+    element.textContent = value;
+  }
+}
+
+function t(key, values = {}) {
+  const template = TRANSLATIONS[currentLanguage]?.[key] ?? TRANSLATIONS.en[key] ?? key;
+
+  return Object.entries(values).reduce(
+    (message, [name, value]) => message.replaceAll(`{${name}}`, String(value)),
+    template,
+  );
+}
+
 function initializeTheme() {
   applyTheme(localStorage.getItem(THEME_STORAGE_KEY));
 }
@@ -718,12 +938,16 @@ function applyTheme(theme) {
   document.documentElement.dataset.theme = normalizedTheme;
   localStorage.setItem(THEME_STORAGE_KEY, normalizedTheme);
 
-  const nextTheme = normalizedTheme === "dark" ? "light" : "dark";
-  const nextThemeLabel = nextTheme === "dark" ? "тёмную" : "светлую";
+  updateThemeToggle(normalizedTheme);
+}
+
+function updateThemeToggle(theme) {
+  const nextTheme = theme === "dark" ? "light" : "dark";
+  const nextThemeLabel = nextTheme === "dark" ? t("enableDarkTheme") : t("enableLightTheme");
 
   themeToggleButton.dataset.nextTheme = nextTheme;
-  themeToggleButton.setAttribute("aria-label", `Включить ${nextThemeLabel} тему`);
-  themeToggleButton.title = `Включить ${nextThemeLabel} тему`;
+  themeToggleButton.setAttribute("aria-label", nextThemeLabel);
+  themeToggleButton.title = nextThemeLabel;
 }
 
 function render() {
@@ -757,7 +981,7 @@ function createTodoElement(todo) {
   checkbox.disabled = !canEditTodos();
   checkbox.dataset.action = "toggle";
   checkbox.dataset.id = todo.id;
-  checkbox.setAttribute("aria-label", `Отметить дело: ${todo.text}`);
+  checkbox.setAttribute("aria-label", t("markTodo", { text: todo.text }));
 
   const text = document.createElement("span");
   text.className = "todo-text";
@@ -770,8 +994,8 @@ function createTodoElement(todo) {
   deleteButton.textContent = "×";
   deleteButton.dataset.action = "delete";
   deleteButton.dataset.id = todo.id;
-  deleteButton.setAttribute("aria-label", `Удалить дело: ${todo.text}`);
-  deleteButton.title = "Удалить";
+  deleteButton.setAttribute("aria-label", t("deleteTodo", { text: todo.text }));
+  deleteButton.title = t("delete");
 
   checkboxLabel.append(checkbox);
   mainRow.append(checkboxLabel, text, deleteButton);
@@ -805,7 +1029,7 @@ function createSubtaskElement(todo, subtask) {
   checkbox.dataset.action = "toggle-subtask";
   checkbox.dataset.parentId = todo.id;
   checkbox.dataset.id = subtask.id;
-  checkbox.setAttribute("aria-label", `Отметить подзадачу: ${subtask.text}`);
+  checkbox.setAttribute("aria-label", t("markSubtask", { text: subtask.text }));
 
   const text = document.createElement("span");
   text.className = "subtask-text";
@@ -819,8 +1043,8 @@ function createSubtaskElement(todo, subtask) {
   deleteButton.dataset.action = "delete-subtask";
   deleteButton.dataset.parentId = todo.id;
   deleteButton.dataset.id = subtask.id;
-  deleteButton.setAttribute("aria-label", `Удалить подзадачу: ${subtask.text}`);
-  deleteButton.title = "Удалить";
+  deleteButton.setAttribute("aria-label", t("deleteSubtask", { text: subtask.text }));
+  deleteButton.title = t("delete");
 
   checkboxLabel.append(checkbox);
   item.append(checkboxLabel, text, deleteButton);
@@ -837,7 +1061,7 @@ function createSubtaskForm(todo) {
   const label = document.createElement("label");
   label.className = "visually-hidden";
   label.htmlFor = `subtask-input-${todo.id}`;
-  label.textContent = `Новая подзадача для: ${todo.text}`;
+  label.textContent = t("newSubtaskFor", { text: todo.text });
 
   const input = document.createElement("input");
   input.className = "subtask-input";
@@ -845,7 +1069,7 @@ function createSubtaskForm(todo) {
   input.type = "text";
   input.autocomplete = "off";
   input.maxLength = 400;
-  input.placeholder = "Добавить подзадачу";
+  input.placeholder = t("addSubtask");
   input.disabled = !canEditTodos();
   input.dataset.role = "subtask-input";
 
@@ -853,7 +1077,7 @@ function createSubtaskForm(todo) {
   button.className = "subtask-add-button";
   button.type = "submit";
   button.disabled = !canEditTodos();
-  button.textContent = "Добавить";
+  button.textContent = t("add");
 
   form.append(label, input, button);
 
@@ -870,11 +1094,11 @@ function updateProgress() {
   progressBar.style.width = `${progressPercent}%`;
 
   if (dayResult?.closed) {
-    progressText.textContent = `День завершён: выполнено ${progressPercent}%`;
-    finishDayButton.textContent = "День завершён";
+    progressText.textContent = t("dayCompleted", { percent: progressPercent });
+    finishDayButton.textContent = t("finishedDay");
   } else {
-    progressText.textContent = `Выполнено: ${progressPercent}%`;
-    finishDayButton.textContent = "Завершить день";
+    progressText.textContent = t("completed", { percent: progressPercent });
+    finishDayButton.textContent = t("finishDay");
   }
 
   finishDayButton.disabled = !canFinishDay();
@@ -882,10 +1106,10 @@ function updateProgress() {
 
 function getEmptyStateText() {
   if (!isSelectedToday()) {
-    return "За выбранный день нет дел.";
+    return t("noTodosForDay");
   }
 
-  return "Пока нет дел. Добавьте первое дело на сегодня.";
+  return t("emptyToday");
 }
 
 function getProgressPercent(completedCount, totalCount) {
@@ -967,8 +1191,8 @@ function updateDateControls() {
   selectedDateInput.value = selectedDateKey;
 
   selectedDateInput.title = isSelectedToday()
-    ? "Выбрать день"
-    : `История за ${formatDisplayDate(selectedDateKey)}`;
+    ? t("chooseDay")
+    : t("historyFor", { date: formatDisplayDate(selectedDateKey) });
 }
 
 function normalizeSelectedDateKey(dateKey) {
@@ -1005,7 +1229,7 @@ function formatDisplayDate(dateKey) {
   const [year, month, day] = dateKey.split("-").map(Number);
   const date = new Date(year, month - 1, day);
 
-  return new Intl.DateTimeFormat("ru-RU", {
+  return new Intl.DateTimeFormat(currentLanguage === "ru" ? "ru-RU" : "en-US", {
     weekday: "long",
     day: "numeric",
     month: "long",
@@ -1048,9 +1272,9 @@ async function autoFinishDayIfNeeded() {
 
   try {
     await finishDay();
-    showAuthMessage("Итог дня подведён автоматически после 22:00.");
+    showAuthMessage(t("autoFinished"));
   } catch (error) {
-    showError("Не удалось автоматически подвести итог дня.", error);
+    showError(t("autoFinishFailed"), error);
     render();
   } finally {
     isAutoFinishing = false;

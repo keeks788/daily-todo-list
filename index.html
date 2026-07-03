@@ -6,7 +6,8 @@
     <title>Список дел на сегодня</title>
     <meta name="theme-color" content="#2563eb" />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-    <link rel="apple-touch-icon" href="./favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
     <link rel="manifest" href="./site.webmanifest" />
     <link rel="stylesheet" href="style.css" />
     <script type="importmap">
@@ -58,16 +59,28 @@
               >
                 <div class="account-dropdown-header">
                   <span class="auth-label">Профиль</span>
-                  <button
-                    class="theme-toggle-button"
-                    id="theme-toggle-button"
-                    type="button"
-                    data-next-theme="dark"
-                    aria-label="Включить тёмную тему"
-                    title="Включить тёмную тему"
-                  >
-                    <span class="theme-toggle-icon" aria-hidden="true"></span>
-                  </button>
+                  <div class="account-controls">
+                    <button
+                      class="icon-toggle-button theme-toggle-button"
+                      id="theme-toggle-button"
+                      type="button"
+                      data-next-theme="dark"
+                      aria-label="Включить тёмную тему"
+                      title="Включить тёмную тему"
+                    >
+                      <span class="theme-toggle-icon" aria-hidden="true"></span>
+                    </button>
+                    <button
+                      class="icon-toggle-button language-toggle-button"
+                      id="language-toggle-button"
+                      type="button"
+                      data-next-language="en"
+                      aria-label="Switch to English"
+                      title="Switch to English"
+                    >
+                      EN
+                    </button>
+                  </div>
                 </div>
                 <p class="auth-status" id="auth-status">Проверяем подключение...</p>
                 <button class="secondary-button" id="login-button" type="button">
