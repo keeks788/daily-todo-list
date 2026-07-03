@@ -2,10 +2,8 @@ import { initializeApp } from "firebase/app";
 import {
   getAuth,
   GoogleAuthProvider,
-  getRedirectResult,
   onAuthStateChanged,
   signInWithPopup,
-  signInWithRedirect,
   signOut,
 } from "firebase/auth";
 import {
@@ -170,14 +168,9 @@ loginButton.addEventListener("click", async () => {
   loginButton.disabled = true;
 
   try {
-    if (shouldUseRedirectSignIn()) {
-      await firebaseServices.signInWithRedirect(firebaseServices.auth, firebaseServices.provider);
-      return;
-    }
-
     await firebaseServices.signInWithPopup(firebaseServices.auth, firebaseServices.provider);
   } catch (error) {
-    showError("Не удалось войти через Google. Проверьте Firebase Authentication.", error);
+    showError(getSignInErrorMessage(error), error);
   } finally {
     loginButton.disabled = false;
   }
@@ -279,9 +272,8 @@ function setupCloudMode() {
   setupNotice.classList.add("is-hidden");
   loginButton.disabled = false;
   updateAccountMenuLabel("Войти");
-  showAuthMessage("Войдите через Google, чтобы загрузить дела из облака.");
-  setTodoEditingEnabled(false);
-  processRedirectSignInResult();
+  showAuthMessage("Войдите через Google или работайте локально в этом браузере.");
+  setTodoEditingEnabled(true);
 
   firebaseServices.onAuthStateChanged(firebaseServices.auth, (user) => {
     currentUser = user;
@@ -289,30 +281,27 @@ function setupCloudMode() {
   });
 }
 
-async function processRedirectSignInResult() {
-  try {
-    await firebaseServices.getRedirectResult(firebaseServices.auth);
-  } catch (error) {
-    showError("Не удалось завершить вход через Google.", error);
+function getSignInErrorMessage(error) {
+  if (error?.code === "auth/popup-blocked" || error?.code === "auth/popup-closed-by-user") {
+    return "Не удалось открыть окно входа. Можно продолжить работу локально в этом браузере.";
   }
-}
 
-function shouldUseRedirectSignIn() {
-  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+  return "Не удалось войти через Google. Можно продолжить работу локально в этом браузере.";
 }
 
 function handleAuthStateChange(user) {
   unsubscribeFromCloudData();
 
   if (!user) {
-    todos = [];
-    dayResult = null;
+    todos = loadLocalTodos();
+    dayResult = loadLocalDayResult();
     loginButton.classList.remove("is-hidden");
     profilePanel.classList.add("is-hidden");
     updateAccountMenuLabel("Войти");
-    showAuthMessage("Войдите через Google, чтобы работать со своим списком.");
-    setTodoEditingEnabled(false);
+    showAuthMessage("Войдите через Google или работайте локально в этом браузере.");
+    setTodoEditingEnabled(true);
     render();
+    resizeTodoInput();
     return;
   }
 
@@ -332,18 +321,11 @@ function changeSelectedDate(dateKey) {
   updateDateControls();
   unsubscribeFromCloudData();
 
-  if (appMode === "local") {
+  if (usesLocalStorage()) {
     todos = loadLocalTodos();
     dayResult = loadLocalDayResult();
     render();
     resizeTodoInput();
-    return;
-  }
-
-  if (!currentUser) {
-    todos = [];
-    dayResult = null;
-    render();
     return;
   }
 
@@ -398,7 +380,7 @@ async function addTodo(text) {
     subtasks: [],
   };
 
-  if (appMode === "local") {
+  if (usesLocalStorage()) {
     todos = [...todos, todo];
     clearLocalDayResultIfClosed();
     saveLocalTodos();
@@ -431,7 +413,7 @@ async function toggleTodo(id, completed) {
   const subtasks = todoToUpdate.subtasks.map((subtask) => ({ ...subtask, completed }));
   const updates = { completed, subtasks };
 
-  if (appMode === "local") {
+  if (usesLocalStorage()) {
     todos = todos.map((todo) => (todo.id === id ? { ...todo, ...updates } : todo));
     clearLocalDayResultIfClosed();
     saveLocalTodos();
@@ -456,7 +438,7 @@ async function toggleTodo(id, completed) {
 async function deleteTodo(id) {
   requireEditableDay();
 
-  if (appMode === "local") {
+  if (usesLocalStorage()) {
     todos = todos.filter((todo) => todo.id !== id);
     clearLocalDayResultIfClosed();
     saveLocalTodos();
@@ -524,7 +506,7 @@ async function deleteSubtask(parentId, subtaskId) {
 }
 
 async function updateTodoSubtasks(parentId, subtasks, completed) {
-  if (appMode === "local") {
+  if (usesLocalStorage()) {
     todos = todos.map((todo) => (todo.id === parentId ? { ...todo, completed, subtasks } : todo));
     clearLocalDayResultIfClosed();
     saveLocalTodos();
@@ -552,7 +534,7 @@ async function finishDay() {
 
   const result = createDayResult();
 
-  if (appMode === "local") {
+  if (usesLocalStorage()) {
     dayResult = result;
     saveLocalDayResult();
     render();
@@ -903,10 +885,6 @@ function getEmptyStateText() {
     return "За выбранный день нет дел.";
   }
 
-  if (appMode === "cloud" && !currentUser) {
-    return "Войдите, чтобы увидеть свои дела.";
-  }
-
   return "Пока нет дел. Добавьте первое дело на сегодня.";
 }
 
@@ -971,7 +949,11 @@ function findTodo(id) {
 }
 
 function canEditTodos() {
-  return isSelectedToday() && (appMode === "local" || Boolean(currentUser));
+  return isSelectedToday() && (usesLocalStorage() || Boolean(currentUser));
+}
+
+function usesLocalStorage() {
+  return appMode === "local" || !currentUser;
 }
 
 function initializeDateControls() {
@@ -1189,9 +1171,7 @@ function loadFirebaseServices() {
     query,
     serverTimestamp,
     setDoc,
-    getRedirectResult,
     signInWithPopup,
-    signInWithRedirect,
     signOut,
   };
 }
