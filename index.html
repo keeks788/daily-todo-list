@@ -116,7 +116,15 @@
                 aria-controls="account-menu-panel"
               >
                 <span class="account-dot" aria-hidden="true"></span>
-                <span class="account-gear-icon" aria-hidden="true"></span>
+                <span class="account-gear-icon" aria-hidden="true">
+                  <svg viewBox="0 0 100 100" focusable="false">
+                    <path
+                      d="M57 8 62 23c3 1 6 3 8 5l15-6 8 14-12 11v6l12 11-8 14-15-6c-2 2-5 4-8 5l-5 15H43l-5-15c-3-1-6-3-8-5l-15 6-8-14 12-11v-6L7 36l8-14 15 6c2-2 5-4 8-5l5-15h14Z"
+                    />
+                    <circle cx="50" cy="50" r="18" />
+                    <circle cx="50" cy="50" r="8" />
+                  </svg>
+                </span>
                 <span id="account-menu-label">Профиль</span>
               </button>
 
@@ -137,16 +145,6 @@
                       title="Включить тёмную тему"
                     >
                       <span class="theme-toggle-icon" aria-hidden="true"></span>
-                    </button>
-                    <button
-                      class="icon-toggle-button language-toggle-button"
-                      id="language-toggle-button"
-                      type="button"
-                      data-next-language="en"
-                      aria-label="Switch to English"
-                      title="Switch to English"
-                    >
-                      EN
                     </button>
                   </div>
                 </div>
@@ -211,12 +209,12 @@
         <p class="selected-date-label" id="selected-date-label" aria-live="polite"></p>
 
         <section class="seo-description" aria-label="Описание сервиса">
-          <h2>Daily To-Do List — онлайн-планировщик задач</h2>
-          <p>
+          <h2 id="seo-title">Daily To-Do List — онлайн-планировщик задач</h2>
+          <p id="seo-description-primary">
             Создавайте задачи на сегодня и будущие дни, добавляйте подзадачи, отслеживайте прогресс
             и завершайте день с итогом выполнения.
           </p>
-          <p>
+          <p id="seo-description-secondary">
             Daily To-Do List is a simple online task planner for daily todos, subtasks, progress
             tracking, and calendar planning.
           </p>

@@ -130,9 +130,11 @@ h1 {
 }
 
 .header-actions {
-  display: inline-flex;
+  display: inline-grid;
+  grid-template-columns: auto 44px;
   gap: 8px;
   align-items: center;
+  justify-content: center;
 }
 
 .date-controls {
@@ -227,12 +229,25 @@ h1 {
 
 .account-gear-icon {
   display: none;
-  font-size: 20px;
-  line-height: 1;
+  width: 26px;
+  height: 26px;
+  color: currentColor;
 }
 
-.account-gear-icon::before {
-  content: "⚙";
+.account-gear-icon svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
+}
+
+.account-gear-icon path,
+.account-gear-icon circle {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .account-menu.is-signed-in .account-menu-button {
@@ -287,6 +302,12 @@ h1 {
   flex: 0 0 auto;
 }
 
+.account-controls .theme-toggle-button {
+  width: 32px;
+  height: 32px;
+  flex-basis: 32px;
+}
+
 .auth-label {
   display: block;
   color: var(--text-main);
@@ -316,12 +337,6 @@ h1 {
 .icon-toggle-button:focus-visible {
   outline: none;
   box-shadow: 0 0 0 4px var(--accent-soft);
-}
-
-.language-toggle-button {
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0;
 }
 
 .theme-toggle-icon {
@@ -698,17 +713,22 @@ h1 {
 .seo-description {
   display: grid;
   gap: 8px;
+  width: min(100%, 680px);
   margin-top: 28px;
+  margin-right: auto;
+  margin-left: auto;
   padding-top: 18px;
   border-top: 1px solid var(--border);
   color: var(--text-muted);
   font-size: 14px;
   line-height: 1.6;
+  text-align: center;
+  opacity: 0.72;
 }
 
 .seo-description h2 {
   margin: 0;
-  color: var(--text-main);
+  color: inherit;
   font-size: 17px;
   line-height: 1.35;
 }
@@ -751,15 +771,16 @@ h1 {
   .header-actions {
     width: 100%;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(44px, auto);
-    align-items: start;
+    grid-template-columns: auto 44px;
+    align-items: center;
+    justify-content: center;
   }
 
   .date-controls {
     display: grid;
     grid-template-columns: 44px 44px 44px;
     gap: 8px;
-    justify-content: start;
+    justify-content: center;
   }
 
   .calendar-menu {

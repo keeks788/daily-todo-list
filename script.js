@@ -27,11 +27,9 @@ const progressTrack = document.querySelector("#progress-track");
 const progressBar = document.querySelector("#progress-bar");
 const finishDayButton = document.querySelector("#finish-day-button");
 const themeToggleButton = document.querySelector("#theme-toggle-button");
-const languageToggleButton = document.querySelector("#language-toggle-button");
 
 const AUTO_FINISH_CHECK_INTERVAL_MS = 60_000;
 const THEME_STORAGE_KEY = "dailyTodoTheme";
-const LANGUAGE_STORAGE_KEY = "dailyTodoLanguage";
 const THEMES = new Set(["light", "dark"]);
 const LANGUAGES = new Set(["ru", "en"]);
 
@@ -47,7 +45,12 @@ const TRANSLATIONS = {
     dateControls: "Навигация по дням",
     previousDay: "Предыдущий день",
     nextDay: "Следующий день",
-    selectedDate: "Дата: {date}",
+    selectedDate: "{date}",
+    seoTitle: "Daily To-Do List — онлайн-планировщик задач",
+    seoDescriptionPrimary:
+      "Создавайте задачи на сегодня и будущие дни, добавляйте подзадачи, отслеживайте прогресс и завершайте день с итогом выполнения.",
+    seoDescriptionSecondary:
+      "Daily To-Do List — простой онлайн-планировщик задач для ежедневных дел, подзадач, прогресса и планирования по календарю.",
     openProfileMenu: "Открыть профиль",
     calendarTodayStatus: "Выбран сегодняшний день",
     calendarPastStatus: "Выбран день из истории: {date}",
@@ -95,8 +98,6 @@ const TRANSLATIONS = {
     autoFinishFailed: "Не удалось автоматически подвести итог дня.",
     enableDarkTheme: "Включить тёмную тему",
     enableLightTheme: "Включить светлую тему",
-    switchToEnglish: "Switch to English",
-    switchToRussian: "Переключить на русский",
     markTodo: "Отметить дело: {text}",
     deleteTodo: "Удалить дело: {text}",
     markSubtask: "Отметить подзадачу: {text}",
@@ -116,7 +117,12 @@ const TRANSLATIONS = {
     dateControls: "Day navigation",
     previousDay: "Previous day",
     nextDay: "Next day",
-    selectedDate: "Date: {date}",
+    selectedDate: "{date}",
+    seoTitle: "Daily To-Do List — online task planner",
+    seoDescriptionPrimary:
+      "Create tasks for today and future days, add subtasks, track progress, and finish the day with a completion summary.",
+    seoDescriptionSecondary:
+      "Daily To-Do List is a simple online task planner for daily todos, subtasks, progress tracking, and calendar planning.",
     openProfileMenu: "Open profile",
     calendarTodayStatus: "Selected date: today",
     calendarPastStatus: "Selected past date: {date}",
@@ -162,8 +168,6 @@ const TRANSLATIONS = {
     autoFinishFailed: "Could not automatically finish the day.",
     enableDarkTheme: "Enable dark theme",
     enableLightTheme: "Enable light theme",
-    switchToEnglish: "Switch to English",
-    switchToRussian: "Переключить на русский",
     markTodo: "Mark todo: {text}",
     deleteTodo: "Delete todo: {text}",
     markSubtask: "Mark subtask: {text}",
@@ -326,10 +330,6 @@ logoutButton.addEventListener("click", async () => {
 
 themeToggleButton.addEventListener("click", () => {
   applyTheme(themeToggleButton.dataset.nextTheme);
-});
-
-languageToggleButton.addEventListener("click", () => {
-  applyLanguage(languageToggleButton.dataset.nextLanguage);
 });
 
 finishDayButton.addEventListener("click", async () => {
@@ -896,8 +896,6 @@ function initializeLanguage() {
 function applyLanguage(language) {
   currentLanguage = LANGUAGES.has(language) ? language : getBrowserLanguage();
   document.documentElement.lang = currentLanguage;
-  localStorage.setItem(LANGUAGE_STORAGE_KEY, currentLanguage);
-  updateLanguageToggle();
   updateStaticText();
 
   if (list.childElementCount > 0) {
@@ -906,23 +904,11 @@ function applyLanguage(language) {
 }
 
 function getInitialLanguage() {
-  const savedLanguage = localStorage.getItem(LANGUAGE_STORAGE_KEY);
-
-  return LANGUAGES.has(savedLanguage) ? savedLanguage : getBrowserLanguage();
+  return getBrowserLanguage();
 }
 
 function getBrowserLanguage() {
   return navigator.language?.toLowerCase().startsWith("ru") ? "ru" : "en";
-}
-
-function updateLanguageToggle() {
-  const nextLanguage = currentLanguage === "ru" ? "en" : "ru";
-  const label = nextLanguage === "ru" ? t("switchToRussian") : t("switchToEnglish");
-
-  languageToggleButton.dataset.nextLanguage = nextLanguage;
-  languageToggleButton.textContent = nextLanguage.toUpperCase();
-  languageToggleButton.setAttribute("aria-label", label);
-  languageToggleButton.title = label;
 }
 
 function updateStaticText() {
@@ -935,6 +921,9 @@ function updateStaticText() {
   setText("#login-button", t("loginWithGoogle"));
   setText("#logout-button", t("signOut"));
   setText("#setup-notice", t("setupNotice"));
+  setText("#seo-title", t("seoTitle"));
+  setText("#seo-description-primary", t("seoDescriptionPrimary"));
+  setText("#seo-description-secondary", t("seoDescriptionSecondary"));
   setDateControlsLabel();
 
   input.placeholder = t("todoPlaceholder");
@@ -1257,7 +1246,9 @@ function updateDateControls() {
   calendarButton.title = calendarTitle;
   calendarButton.setAttribute("aria-label", calendarTitle);
   calendarStatus.textContent = calendarStatusText;
-  selectedDateLabel.textContent = t("selectedDate", { date: formatDisplayDate(selectedDateKey) });
+  selectedDateLabel.textContent = t("selectedDate", {
+    date: formatDateWithoutYear(selectedDateKey),
+  });
   previousDayButton.setAttribute("aria-label", t("previousDay"));
   previousDayButton.title = t("previousDay");
   nextDayButton.setAttribute("aria-label", t("nextDay"));
@@ -1351,15 +1342,27 @@ function getLocalDayResultKey() {
 }
 
 function formatDisplayDate(dateKey) {
-  const [year, month, day] = dateKey.split("-").map(Number);
-  const date = new Date(year, month - 1, day);
-
-  return new Intl.DateTimeFormat(getCurrentLocale(), {
+  return formatDate(dateKey, {
     weekday: "long",
     day: "numeric",
     month: "long",
     year: "numeric",
-  }).format(date);
+  });
+}
+
+function formatDateWithoutYear(dateKey) {
+  return formatDate(dateKey, {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+}
+
+function formatDate(dateKey, options) {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+
+  return new Intl.DateTimeFormat(getCurrentLocale(), options).format(date);
 }
 
 function getCurrentLocale() {
