@@ -43,7 +43,6 @@ const finishDayButton = document.querySelector("#finish-day-button");
 const themeToggleButton = document.querySelector("#theme-toggle-button");
 const languageToggleButton = document.querySelector("#language-toggle-button");
 
-const AUTO_FINISH_HOUR = 22;
 const AUTO_FINISH_CHECK_INTERVAL_MS = 60_000;
 const THEME_STORAGE_KEY = "dailyTodoTheme";
 const LANGUAGE_STORAGE_KEY = "dailyTodoLanguage";
@@ -59,6 +58,7 @@ const TRANSLATIONS = {
     userFallback: "Пользователь",
     chooseDay: "Выбрать день",
     historyFor: "История за {date}",
+    plannedFor: "План на {date}",
     progress: "Прогресс",
     progressAria: "Прогресс выполнения дел",
     completed: "Выполнено: {percent}%",
@@ -73,6 +73,7 @@ const TRANSLATIONS = {
     todayTodos: "Дела на сегодня",
     noTodosForDay: "За выбранный день нет дел.",
     emptyToday: "Пока нет дел. Добавьте первое дело на сегодня.",
+    emptySelectedDay: "Пока нет дел. Добавьте первое дело на выбранный день.",
     setupNotice:
       "Облачная синхронизация пока не настроена. Дела временно сохраняются только в этом браузере.",
     checkingConnection: "Проверяем подключение...",
@@ -95,7 +96,7 @@ const TRANSLATIONS = {
     dayResultLoadFailed: "Не удалось загрузить итог дня. Проверьте Firestore rules.",
     synced: "Синхронизировано с облаком.",
     databaseAccessFailed: "Нет доступа к базе. Проверьте Firestore и security rules.",
-    autoFinished: "Итог дня подведён автоматически после 22:00.",
+    autoFinished: "Итог дня подведён автоматически после 00:00.",
     autoFinishFailed: "Не удалось автоматически подвести итог дня.",
     enableDarkTheme: "Включить тёмную тему",
     enableLightTheme: "Включить светлую тему",
@@ -117,6 +118,7 @@ const TRANSLATIONS = {
     userFallback: "User",
     chooseDay: "Choose day",
     historyFor: "History for {date}",
+    plannedFor: "Plan for {date}",
     progress: "Progress",
     progressAria: "Todo progress",
     completed: "Completed: {percent}%",
@@ -131,6 +133,7 @@ const TRANSLATIONS = {
     todayTodos: "Today’s todos",
     noTodosForDay: "There are no todos for the selected day.",
     emptyToday: "No todos yet. Add your first todo for today.",
+    emptySelectedDay: "No todos yet. Add your first todo for the selected day.",
     setupNotice: "Cloud sync is not configured yet. Todos are saved only in this browser.",
     checkingConnection: "Checking connection...",
     localModeMessage: "Local mode: data is saved only in this browser.",
@@ -151,7 +154,7 @@ const TRANSLATIONS = {
     dayResultLoadFailed: "Could not load the day result. Check Firestore rules.",
     synced: "Synced with cloud.",
     databaseAccessFailed: "No database access. Check Firestore and security rules.",
-    autoFinished: "The day was finished automatically after 22:00.",
+    autoFinished: "The day was finished automatically after 00:00.",
     autoFinishFailed: "Could not automatically finish the day.",
     enableDarkTheme: "Enable dark theme",
     enableLightTheme: "Enable light theme",
@@ -169,6 +172,7 @@ const TRANSLATIONS = {
 
 let currentLanguage = getInitialLanguage();
 let selectedDateKey = getTodayKey();
+let autoFinishDateKey = selectedDateKey;
 
 let todos = [];
 let dayResult = null;
@@ -180,6 +184,8 @@ let unsubscribeDay = null;
 let autoFinishTimer = null;
 let autoFinishCheckQueued = false;
 let isAutoFinishing = false;
+let currentAuthMessageKey = "checkingConnection";
+let currentAuthMessageParams = {};
 
 initializeLanguage();
 initializeTheme();
@@ -283,7 +289,7 @@ list.addEventListener("submit", async (event) => {
 
 loginButton.addEventListener("click", async () => {
   if (!firebaseServices) {
-    showAuthMessage(t("missingFirebaseConfig"));
+    showAuthMessage("missingFirebaseConfig");
     return;
   }
 
@@ -395,7 +401,7 @@ function enableLocalMode() {
   profilePanel.classList.add("is-hidden");
   loginButton.classList.remove("is-hidden");
   updateAccountMenuLabel(t("localModeLabel"));
-  showAuthMessage(t("localModeMessage"));
+  showAuthMessage("localModeMessage");
   setTodoEditingEnabled(true);
   render();
   resizeTodoInput();
@@ -406,7 +412,7 @@ function setupCloudMode() {
   setupNotice.classList.add("is-hidden");
   loginButton.disabled = false;
   updateAccountMenuLabel(t("signInLabel"));
-  showAuthMessage(t("signInOrLocalMessage"));
+  showAuthMessage("signInOrLocalMessage");
   setTodoEditingEnabled(true);
 
   firebaseServices.onAuthStateChanged(firebaseServices.auth, (user) => {
@@ -432,7 +438,7 @@ function handleAuthStateChange(user) {
     loginButton.classList.remove("is-hidden");
     profilePanel.classList.add("is-hidden");
     updateAccountMenuLabel(t("signInLabel"));
-    showAuthMessage(t("signInOrLocalMessage"));
+    showAuthMessage("signInOrLocalMessage");
     setTodoEditingEnabled(true);
     render();
     resizeTodoInput();
@@ -444,7 +450,7 @@ function handleAuthStateChange(user) {
   profileName.textContent = user.displayName || t("userFallback");
   profileEmail.textContent = user.email || "";
   updateAccountMenuLabel(user.displayName || t("profile"));
-  showAuthMessage(t("loadingCloudTodos"));
+  showAuthMessage("loadingCloudTodos");
   setTodoEditingEnabled(true);
   subscribeToDay(user.uid);
   subscribeToTodos(user.uid);
@@ -463,7 +469,7 @@ function changeSelectedDate(dateKey) {
     return;
   }
 
-  showAuthMessage(t("loadingSelectedDay"));
+  showAuthMessage("loadingSelectedDay");
   subscribeToDay(currentUser.uid);
   subscribeToTodos(currentUser.uid);
 }
@@ -493,7 +499,7 @@ function subscribeToTodos(userId) {
     todosQuery,
     (snapshot) => {
       todos = snapshot.docs.map((document) => normalizeTodo(document.id, document.data()));
-      showAuthMessage(t("synced"));
+      showAuthMessage("synced");
       render();
     },
     (error) => {
@@ -663,8 +669,10 @@ async function updateTodoSubtasks(parentId, subtasks, completed) {
   await clearCloudDayResultIfClosed();
 }
 
-async function finishDay() {
-  requireEditableDay();
+async function finishDay(options = {}) {
+  if (options.requireEditable !== false) {
+    requireEditableDay();
+  }
 
   const result = createDayResult();
 
@@ -890,6 +898,7 @@ function updateStaticText() {
   setText("#setup-notice", t("setupNotice"));
 
   input.placeholder = t("todoPlaceholder");
+  emptyState.textContent = getEmptyStateText();
   selectedDateInput.setAttribute("aria-label", t("chooseDay"));
   list.setAttribute("aria-label", t("todayTodos"));
   progressTrack.setAttribute("aria-label", t("progressAria"));
@@ -898,6 +907,7 @@ function updateStaticText() {
   updateAccountLabelForState();
   updateDateControls();
   updateProgress();
+  updateAuthMessageText();
 }
 
 function updateAccountLabelForState() {
@@ -1105,11 +1115,11 @@ function updateProgress() {
 }
 
 function getEmptyStateText() {
-  if (!isSelectedToday()) {
+  if (!canEditTodos()) {
     return t("noTodosForDay");
   }
 
-  return t("emptyToday");
+  return isSelectedToday() ? t("emptyToday") : t("emptySelectedDay");
 }
 
 function getProgressPercent(completedCount, totalCount) {
@@ -1117,7 +1127,7 @@ function getProgressPercent(completedCount, totalCount) {
 }
 
 function canFinishDay() {
-  return canEditTodos() && todos.length > 0 && !dayResult?.closed;
+  return isSelectedToday() && canEditTodos() && todos.length > 0 && !dayResult?.closed;
 }
 
 function createDayResult() {
@@ -1173,7 +1183,7 @@ function findTodo(id) {
 }
 
 function canEditTodos() {
-  return isSelectedToday() && (usesLocalStorage() || Boolean(currentUser));
+  return !isSelectedPast() && (usesLocalStorage() || Boolean(currentUser));
 }
 
 function usesLocalStorage() {
@@ -1186,23 +1196,24 @@ function initializeDateControls() {
 }
 
 function updateDateControls() {
-  const todayKey = getTodayKey();
-  selectedDateInput.max = todayKey;
+  selectedDateInput.removeAttribute("max");
   selectedDateInput.value = selectedDateKey;
 
-  selectedDateInput.title = isSelectedToday()
-    ? t("chooseDay")
-    : t("historyFor", { date: formatDisplayDate(selectedDateKey) });
+  if (isSelectedToday()) {
+    selectedDateInput.title = t("chooseDay");
+    return;
+  }
+
+  const titleKey = isSelectedPast() ? "historyFor" : "plannedFor";
+  selectedDateInput.title = t(titleKey, { date: formatDisplayDate(selectedDateKey) });
 }
 
 function normalizeSelectedDateKey(dateKey) {
-  const todayKey = getTodayKey();
-
   if (!isDateKey(dateKey)) {
     return selectedDateKey;
   }
 
-  return dateKey > todayKey ? todayKey : dateKey;
+  return dateKey;
 }
 
 function isDateKey(dateKey) {
@@ -1211,6 +1222,10 @@ function isDateKey(dateKey) {
 
 function isSelectedToday() {
   return selectedDateKey === getTodayKey();
+}
+
+function isSelectedPast() {
+  return selectedDateKey < getTodayKey();
 }
 
 function getTodayKey() {
@@ -1264,15 +1279,23 @@ function queueAutoFinishCheck() {
 }
 
 async function autoFinishDayIfNeeded() {
-  if (!shouldAutoFinishDay()) {
+  const todayKey = getTodayKey();
+
+  if (todayKey === autoFinishDateKey || isAutoFinishing) {
+    return;
+  }
+
+  if (!shouldAutoFinishDay(todayKey)) {
+    autoFinishDateKey = todayKey;
     return;
   }
 
   isAutoFinishing = true;
 
   try {
-    await finishDay();
-    showAuthMessage(t("autoFinished"));
+    await finishDay({ requireEditable: false });
+    autoFinishDateKey = todayKey;
+    showAuthMessage("autoFinished");
   } catch (error) {
     showError(t("autoFinishFailed"), error);
     render();
@@ -1281,12 +1304,13 @@ async function autoFinishDayIfNeeded() {
   }
 }
 
-function shouldAutoFinishDay() {
+function shouldAutoFinishDay(todayKey) {
   return (
-    isSelectedToday() &&
-    new Date().getHours() >= AUTO_FINISH_HOUR &&
-    canFinishDay() &&
-    !isAutoFinishing
+    selectedDateKey === autoFinishDateKey &&
+    autoFinishDateKey < todayKey &&
+    todos.length > 0 &&
+    !dayResult?.closed &&
+    (usesLocalStorage() || Boolean(currentUser))
   );
 }
 
@@ -1327,11 +1351,21 @@ function updateAccountMenuLabel(label) {
   accountMenuLabel.textContent = label;
 }
 
-function showAuthMessage(message) {
-  authStatus.textContent = message;
+function showAuthMessage(messageKey, params = {}) {
+  currentAuthMessageKey = messageKey;
+  currentAuthMessageParams = params;
+  updateAuthMessageText();
+}
+
+function updateAuthMessageText() {
+  if (currentAuthMessageKey) {
+    authStatus.textContent = t(currentAuthMessageKey, currentAuthMessageParams);
+  }
 }
 
 function showError(message, error) {
+  currentAuthMessageKey = null;
+  currentAuthMessageParams = {};
   console.error(error);
   authStatus.textContent = message;
 }
