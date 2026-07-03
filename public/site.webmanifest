@@ -1,0 +1,16 @@
+{
+  "name": "Список дел на сегодня",
+  "short_name": "Дела",
+  "description": "Ежедневный список дел с прогрессом, подзадачами и историей дней.",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "64x64",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "theme_color": "#2563eb",
+  "background_color": "#ffffff",
+  "display": "standalone"
+}
