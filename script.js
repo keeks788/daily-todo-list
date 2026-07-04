@@ -1,3 +1,22 @@
+import { initializeApp } from "firebase/app";
+import {
+  getAuth,
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  signInWithPopup,
+  signOut,
+} from "firebase/auth";
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getFirestore,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  setDoc,
+} from "firebase/firestore";
 import { firebaseConfig, isFirebaseConfigured } from "./firebase-config.js";
 
 const form = document.querySelector("#todo-form");
@@ -5,12 +24,7 @@ const input = document.querySelector("#todo-input");
 const addButton = document.querySelector("#add-todo-button");
 const list = document.querySelector("#todo-list");
 const emptyState = document.querySelector("#empty-state");
-const selectedDateLabel = document.querySelector("#selected-date-label");
 const selectedDateInput = document.querySelector("#selected-date-input");
-const calendarButton = document.querySelector("#calendar-button");
-const previousDayButton = document.querySelector("#previous-day-button");
-const nextDayButton = document.querySelector("#next-day-button");
-const calendarStatus = document.querySelector("#calendar-status");
 const authStatus = document.querySelector("#auth-status");
 const loginButton = document.querySelector("#login-button");
 const logoutButton = document.querySelector("#logout-button");
@@ -27,34 +41,22 @@ const progressTrack = document.querySelector("#progress-track");
 const progressBar = document.querySelector("#progress-bar");
 const finishDayButton = document.querySelector("#finish-day-button");
 const themeToggleButton = document.querySelector("#theme-toggle-button");
+const languageToggleButton = document.querySelector("#language-toggle-button");
 
 const AUTO_FINISH_CHECK_INTERVAL_MS = 60_000;
 const THEME_STORAGE_KEY = "dailyTodoTheme";
+const LANGUAGE_STORAGE_KEY = "dailyTodoLanguage";
 const THEMES = new Set(["light", "dark"]);
 const LANGUAGES = new Set(["ru", "en"]);
 
 const TRANSLATIONS = {
   ru: {
-    documentTitle: "Daily To-Do List — онлайн-планировщик задач",
     appTitle: "Список дел на сегодня",
     profile: "Профиль",
     signInLabel: "Войти",
     localModeLabel: "Локально",
     userFallback: "Пользователь",
     chooseDay: "Выбрать день",
-    dateControls: "Навигация по дням",
-    previousDay: "Предыдущий день",
-    nextDay: "Следующий день",
-    selectedDate: "{date}",
-    seoTitle: "Daily To-Do List — онлайн-планировщик задач",
-    seoDescriptionPrimary:
-      "Создавайте задачи на сегодня и будущие дни, добавляйте подзадачи, отслеживайте прогресс и завершайте день с итогом выполнения.",
-    seoDescriptionSecondary:
-      "Daily To-Do List — простой онлайн-планировщик задач для ежедневных дел, подзадач, прогресса и планирования по календарю.",
-    openProfileMenu: "Открыть профиль",
-    calendarTodayStatus: "Выбран сегодняшний день",
-    calendarPastStatus: "Выбран день из истории: {date}",
-    calendarFutureStatus: "Запланированный день: {date}",
     historyFor: "История за {date}",
     plannedFor: "План на {date}",
     progress: "Прогресс",
@@ -98,6 +100,8 @@ const TRANSLATIONS = {
     autoFinishFailed: "Не удалось автоматически подвести итог дня.",
     enableDarkTheme: "Включить тёмную тему",
     enableLightTheme: "Включить светлую тему",
+    switchToEnglish: "Switch to English",
+    switchToRussian: "Переключить на русский",
     markTodo: "Отметить дело: {text}",
     deleteTodo: "Удалить дело: {text}",
     markSubtask: "Отметить подзадачу: {text}",
@@ -107,26 +111,12 @@ const TRANSLATIONS = {
     delete: "Удалить",
   },
   en: {
-    documentTitle: "Daily To-Do List — online task planner",
     appTitle: "Today’s todo list",
     profile: "Profile",
     signInLabel: "Sign in",
     localModeLabel: "Local",
     userFallback: "User",
     chooseDay: "Choose day",
-    dateControls: "Day navigation",
-    previousDay: "Previous day",
-    nextDay: "Next day",
-    selectedDate: "{date}",
-    seoTitle: "Daily To-Do List — online task planner",
-    seoDescriptionPrimary:
-      "Create tasks for today and future days, add subtasks, track progress, and finish the day with a completion summary.",
-    seoDescriptionSecondary:
-      "Daily To-Do List is a simple online task planner for daily todos, subtasks, progress tracking, and calendar planning.",
-    openProfileMenu: "Open profile",
-    calendarTodayStatus: "Selected date: today",
-    calendarPastStatus: "Selected past date: {date}",
-    calendarFutureStatus: "Planned date: {date}",
     historyFor: "History for {date}",
     plannedFor: "Plan for {date}",
     progress: "Progress",
@@ -168,6 +158,8 @@ const TRANSLATIONS = {
     autoFinishFailed: "Could not automatically finish the day.",
     enableDarkTheme: "Enable dark theme",
     enableLightTheme: "Enable light theme",
+    switchToEnglish: "Switch to English",
+    switchToRussian: "Переключить на русский",
     markTodo: "Mark todo: {text}",
     deleteTodo: "Delete todo: {text}",
     markSubtask: "Mark subtask: {text}",
@@ -332,6 +324,10 @@ themeToggleButton.addEventListener("click", () => {
   applyTheme(themeToggleButton.dataset.nextTheme);
 });
 
+languageToggleButton.addEventListener("click", () => {
+  applyLanguage(languageToggleButton.dataset.nextLanguage);
+});
+
 finishDayButton.addEventListener("click", async () => {
   if (!canFinishDay()) {
     return;
@@ -349,18 +345,6 @@ finishDayButton.addEventListener("click", async () => {
 
 input.addEventListener("input", resizeTodoInput);
 
-previousDayButton.addEventListener("click", () => {
-  shiftSelectedDate(-1);
-});
-
-nextDayButton.addEventListener("click", () => {
-  shiftSelectedDate(1);
-});
-
-calendarButton.addEventListener("click", () => {
-  openDatePicker();
-});
-
 selectedDateInput.addEventListener("pointerdown", () => {
   setAccountMenuOpen(false);
 });
@@ -370,7 +354,7 @@ selectedDateInput.addEventListener("focus", () => {
 });
 
 selectedDateInput.addEventListener("change", () => {
-  void changeSelectedDate(selectedDateInput.value);
+  changeSelectedDate(selectedDateInput.value);
 });
 
 accountMenuButton.addEventListener("click", () => {
@@ -416,7 +400,7 @@ function enableLocalMode() {
   logoutButton.disabled = true;
   profilePanel.classList.add("is-hidden");
   loginButton.classList.remove("is-hidden");
-  updateAccountLabelForState();
+  updateAccountMenuLabel(t("localModeLabel"));
   showAuthMessage("localModeMessage");
   setTodoEditingEnabled(true);
   render();
@@ -427,13 +411,13 @@ function setupCloudMode() {
   appMode = "cloud";
   setupNotice.classList.add("is-hidden");
   loginButton.disabled = false;
-  updateAccountLabelForState();
+  updateAccountMenuLabel(t("signInLabel"));
   showAuthMessage("signInOrLocalMessage");
   setTodoEditingEnabled(true);
 
   firebaseServices.onAuthStateChanged(firebaseServices.auth, (user) => {
     currentUser = user;
-    void handleAuthStateChange(user);
+    handleAuthStateChange(user);
   });
 }
 
@@ -445,7 +429,7 @@ function getSignInErrorMessage(error) {
   return t("signInFailed");
 }
 
-async function handleAuthStateChange(user) {
+function handleAuthStateChange(user) {
   unsubscribeFromCloudData();
 
   if (!user) {
@@ -453,7 +437,7 @@ async function handleAuthStateChange(user) {
     dayResult = loadLocalDayResult();
     loginButton.classList.remove("is-hidden");
     profilePanel.classList.add("is-hidden");
-    updateAccountLabelForState();
+    updateAccountMenuLabel(t("signInLabel"));
     showAuthMessage("signInOrLocalMessage");
     setTodoEditingEnabled(true);
     render();
@@ -465,25 +449,14 @@ async function handleAuthStateChange(user) {
   profilePanel.classList.remove("is-hidden");
   profileName.textContent = user.displayName || t("userFallback");
   profileEmail.textContent = user.email || "";
-  updateAccountLabelForState();
+  updateAccountMenuLabel(user.displayName || t("profile"));
   showAuthMessage("loadingCloudTodos");
-  setTodoEditingEnabled(false);
-  render();
-
-  try {
-    await ensureFirestoreServices();
-    setTodoEditingEnabled(true);
-    subscribeToDay(user.uid);
-    subscribeToTodos(user.uid);
-  } catch (error) {
-    showError(t("firebaseLoadFailed"), error);
-    todos = [];
-    dayResult = null;
-    render();
-  }
+  setTodoEditingEnabled(true);
+  subscribeToDay(user.uid);
+  subscribeToTodos(user.uid);
 }
 
-async function changeSelectedDate(dateKey) {
+function changeSelectedDate(dateKey) {
   selectedDateKey = normalizeSelectedDateKey(dateKey);
   updateDateControls();
   unsubscribeFromCloudData();
@@ -497,20 +470,8 @@ async function changeSelectedDate(dateKey) {
   }
 
   showAuthMessage("loadingSelectedDay");
-  setTodoEditingEnabled(false);
-  render();
-
-  try {
-    await ensureFirestoreServices();
-    setTodoEditingEnabled(true);
-    subscribeToDay(currentUser.uid);
-    subscribeToTodos(currentUser.uid);
-  } catch (error) {
-    showError(t("firebaseLoadFailed"), error);
-    todos = [];
-    dayResult = null;
-    render();
-  }
+  subscribeToDay(currentUser.uid);
+  subscribeToTodos(currentUser.uid);
 }
 
 function subscribeToDay(userId) {
@@ -896,6 +857,8 @@ function initializeLanguage() {
 function applyLanguage(language) {
   currentLanguage = LANGUAGES.has(language) ? language : getBrowserLanguage();
   document.documentElement.lang = currentLanguage;
+  localStorage.setItem(LANGUAGE_STORAGE_KEY, currentLanguage);
+  updateLanguageToggle();
   updateStaticText();
 
   if (list.childElementCount > 0) {
@@ -904,15 +867,27 @@ function applyLanguage(language) {
 }
 
 function getInitialLanguage() {
-  return getBrowserLanguage();
+  const savedLanguage = localStorage.getItem(LANGUAGE_STORAGE_KEY);
+
+  return LANGUAGES.has(savedLanguage) ? savedLanguage : getBrowserLanguage();
 }
 
 function getBrowserLanguage() {
   return navigator.language?.toLowerCase().startsWith("ru") ? "ru" : "en";
 }
 
+function updateLanguageToggle() {
+  const nextLanguage = currentLanguage === "ru" ? "en" : "ru";
+  const label = nextLanguage === "ru" ? t("switchToRussian") : t("switchToEnglish");
+
+  languageToggleButton.dataset.nextLanguage = nextLanguage;
+  languageToggleButton.textContent = nextLanguage.toUpperCase();
+  languageToggleButton.setAttribute("aria-label", label);
+  languageToggleButton.title = label;
+}
+
 function updateStaticText() {
-  document.title = t("documentTitle");
+  document.title = t("appTitle");
   setText("#app-title", t("appTitle"));
   setText(".auth-label", t("profile"));
   setText(".summary-title", t("progress"));
@@ -921,13 +896,10 @@ function updateStaticText() {
   setText("#login-button", t("loginWithGoogle"));
   setText("#logout-button", t("signOut"));
   setText("#setup-notice", t("setupNotice"));
-  setText("#seo-title", t("seoTitle"));
-  setText("#seo-description-primary", t("seoDescriptionPrimary"));
-  setText("#seo-description-secondary", t("seoDescriptionSecondary"));
-  setDateControlsLabel();
 
   input.placeholder = t("todoPlaceholder");
   emptyState.textContent = getEmptyStateText();
+  selectedDateInput.setAttribute("aria-label", t("chooseDay"));
   list.setAttribute("aria-label", t("todayTodos"));
   progressTrack.setAttribute("aria-label", t("progressAria"));
   accountMenuPanel.setAttribute("aria-label", t("profile"));
@@ -940,19 +912,13 @@ function updateStaticText() {
 
 function updateAccountLabelForState() {
   if (currentUser) {
-    accountMenu.classList.add("is-signed-in");
-    updateAccountMenuLabel(t("profile"));
-    accountMenuButton.setAttribute("aria-label", t("openProfileMenu"));
-    accountMenuButton.title = t("openProfileMenu");
+    updateAccountMenuLabel(currentUser.displayName || t("profile"));
     return;
   }
 
-  accountMenu.classList.remove("is-signed-in");
-  const label = appMode === "local" && !firebaseServices ? t("localModeLabel") : t("signInLabel");
-
-  updateAccountMenuLabel(label);
-  accountMenuButton.setAttribute("aria-label", label);
-  accountMenuButton.title = label;
+  updateAccountMenuLabel(
+    appMode === "local" && !firebaseServices ? t("localModeLabel") : t("signInLabel"),
+  );
 }
 
 function setText(selector, value) {
@@ -1217,10 +1183,7 @@ function findTodo(id) {
 }
 
 function canEditTodos() {
-  return (
-    !isSelectedPast() &&
-    (usesLocalStorage() || Boolean(currentUser && firebaseServices?.firestoreReady))
-  );
+  return !isSelectedPast() && (usesLocalStorage() || Boolean(currentUser));
 }
 
 function usesLocalStorage() {
@@ -1233,67 +1196,16 @@ function initializeDateControls() {
 }
 
 function updateDateControls() {
-  const calendarStatusText = getCalendarStatusText();
-  const calendarTitle = `${t("chooseDay")}. ${calendarStatusText}`;
-  const locale = getCurrentLocale();
-
   selectedDateInput.removeAttribute("max");
-  selectedDateInput.lang = locale;
   selectedDateInput.value = selectedDateKey;
-  selectedDateInput.title = calendarTitle;
-  selectedDateInput.setAttribute("aria-label", calendarTitle);
-  calendarButton.lang = locale;
-  calendarButton.title = calendarTitle;
-  calendarButton.setAttribute("aria-label", calendarTitle);
-  calendarStatus.textContent = calendarStatusText;
-  selectedDateLabel.textContent = t("selectedDate", {
-    date: formatDateWithoutYear(selectedDateKey),
-  });
-  previousDayButton.setAttribute("aria-label", t("previousDay"));
-  previousDayButton.title = t("previousDay");
-  nextDayButton.setAttribute("aria-label", t("nextDay"));
-  nextDayButton.title = t("nextDay");
-}
 
-function setDateControlsLabel() {
-  const dateControls = document.querySelector(".date-controls");
-
-  if (dateControls) {
-    dateControls.setAttribute("aria-label", t("dateControls"));
-  }
-}
-
-function shiftSelectedDate(offsetDays) {
-  setAccountMenuOpen(false);
-  void changeSelectedDate(addDaysToDateKey(selectedDateKey, offsetDays));
-}
-
-function openDatePicker() {
-  setAccountMenuOpen(false);
-  selectedDateInput.lang = getCurrentLocale();
-  selectedDateInput.focus({ preventScroll: true });
-
-  if (typeof selectedDateInput.showPicker === "function") {
-    try {
-      selectedDateInput.showPicker();
-      return;
-    } catch {
-      selectedDateInput.click();
-      return;
-    }
-  }
-
-  selectedDateInput.click();
-}
-
-function getCalendarStatusText() {
   if (isSelectedToday()) {
-    return t("calendarTodayStatus");
+    selectedDateInput.title = t("chooseDay");
+    return;
   }
 
-  const statusKey = isSelectedPast() ? "calendarPastStatus" : "calendarFutureStatus";
-
-  return t(statusKey, { date: formatDisplayDate(selectedDateKey) });
+  const titleKey = isSelectedPast() ? "historyFor" : "plannedFor";
+  selectedDateInput.title = t(titleKey, { date: formatDisplayDate(selectedDateKey) });
 }
 
 function normalizeSelectedDateKey(dateKey) {
@@ -1317,20 +1229,7 @@ function isSelectedPast() {
 }
 
 function getTodayKey() {
-  return formatDateKey(new Date());
-}
-
-function addDaysToDateKey(dateKey, offsetDays) {
-  const [year, month, day] = dateKey.split("-").map(Number);
-  const date = new Date(year, month - 1, day);
-
-  date.setDate(date.getDate() + offsetDays);
-
-  return formatDateKey(date);
-}
-
-function formatDateKey(date) {
-  return date.toLocaleDateString("sv-SE");
+  return new Date().toLocaleDateString("sv-SE");
 }
 
 function getLocalTodosKey() {
@@ -1342,31 +1241,15 @@ function getLocalDayResultKey() {
 }
 
 function formatDisplayDate(dateKey) {
-  return formatDate(dateKey, {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+
+  return new Intl.DateTimeFormat(currentLanguage === "ru" ? "ru-RU" : "en-US", {
     weekday: "long",
     day: "numeric",
     month: "long",
     year: "numeric",
-  });
-}
-
-function formatDateWithoutYear(dateKey) {
-  return formatDate(dateKey, {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-  });
-}
-
-function formatDate(dateKey, options) {
-  const [year, month, day] = dateKey.split("-").map(Number);
-  const date = new Date(year, month - 1, day);
-
-  return new Intl.DateTimeFormat(getCurrentLocale(), options).format(date);
-}
-
-function getCurrentLocale() {
-  return currentLanguage === "ru" ? "ru-RU" : "en-US";
+  }).format(date);
 }
 
 function startAutoFinishTimer() {
@@ -1427,7 +1310,7 @@ function shouldAutoFinishDay(todayKey) {
     autoFinishDateKey < todayKey &&
     todos.length > 0 &&
     !dayResult?.closed &&
-    (usesLocalStorage() || Boolean(currentUser && firebaseServices?.firestoreReady))
+    (usesLocalStorage() || Boolean(currentUser))
   );
 }
 
@@ -1527,46 +1410,26 @@ function formatUnfinishedCount(count) {
   return `${count} дел`;
 }
 
-async function loadFirebaseServices() {
-  const [appModule, authModule] = await Promise.all([
-    import("firebase/app"),
-    import("firebase/auth"),
-  ]);
-
-  const app = appModule.initializeApp(firebaseConfig);
+function loadFirebaseServices() {
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  const provider = new GoogleAuthProvider();
 
   return {
-    app,
-    auth: authModule.getAuth(app),
-    provider: new authModule.GoogleAuthProvider(),
-    firestoreReady: false,
-    onAuthStateChanged: authModule.onAuthStateChanged,
-    signInWithPopup: authModule.signInWithPopup,
-    signOut: authModule.signOut,
+    auth,
+    db,
+    provider,
+    collection,
+    deleteDoc,
+    doc,
+    onAuthStateChanged,
+    onSnapshot,
+    orderBy,
+    query,
+    serverTimestamp,
+    setDoc,
+    signInWithPopup,
+    signOut,
   };
-}
-
-async function ensureFirestoreServices() {
-  if (firebaseServices?.firestoreReady) {
-    return;
-  }
-
-  if (!firebaseServices?.app) {
-    throw new Error("Firebase app is not initialized.");
-  }
-
-  const firestoreModule = await import("firebase/firestore");
-
-  Object.assign(firebaseServices, {
-    db: firestoreModule.getFirestore(firebaseServices.app),
-    collection: firestoreModule.collection,
-    deleteDoc: firestoreModule.deleteDoc,
-    doc: firestoreModule.doc,
-    firestoreReady: true,
-    onSnapshot: firestoreModule.onSnapshot,
-    orderBy: firestoreModule.orderBy,
-    query: firestoreModule.query,
-    serverTimestamp: firestoreModule.serverTimestamp,
-    setDoc: firestoreModule.setDoc,
-  });
 }
